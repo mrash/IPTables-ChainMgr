@@ -153,7 +153,7 @@ sub append_ip_rule() {
         if ($extended_href) {
             $msg = "Table: $table, chain: $chain, $normalized_src -> " .
                 "$normalized_dst ";
-            for my $key qw(protocol s_port d_port mac_source) {
+            for my $key (qw(protocol s_port d_port mac_source)) {
                 $msg .= "$key $extended_href->{$key} "
                     if defined $extended_href->{$key};
             }
@@ -186,7 +186,7 @@ sub append_ip_rule() {
 
         $msg = "Table: $table, chain: $chain, added $normalized_src " .
             "-> $normalized_dst ";
-        for my $key qw(protocol s_port d_port mac_source) {
+        for my $key (qw(protocol s_port d_port mac_source)) {
             $msg .= "$key $extended_href->{$key} "
                 if defined $extended_href->{$key};
         }
@@ -242,7 +242,7 @@ sub add_ip_rule() {
         if ($extended_href) {
             $msg = "Table: $table, chain: $chain, $normalized_src -> " .
                 "$normalized_dst ";
-            for my $key qw(protocol s_port d_port mac_source) {
+            for my $key (qw(protocol s_port d_port mac_source)) {
                 $msg .= "$key $extended_href->{$key} "
                     if defined $extended_href->{$key};
             }
@@ -285,7 +285,7 @@ sub add_ip_rule() {
 
         $msg = "Table: $table, chain: $chain, added $normalized_src " .
             "-> $normalized_dst ";
-        for my $key qw(protocol s_port d_port mac_source) {
+        for my $key (qw(protocol s_port d_port mac_source)) {
             $msg .= "$key $extended_href->{$key} "
                 if defined $extended_href->{$key};
         }
@@ -342,7 +342,7 @@ sub delete_ip_rule() {
 
     my $extended_msg = '';
     if ($extended_href) {
-        for my $key qw(protocol s_port d_port mac_source) {
+        for my $key (qw(protocol s_port d_port mac_source)) {
             $extended_msg .= "$key: $extended_href->{$key} "
                 if defined $extended_href->{$key};
         }
@@ -401,13 +401,13 @@ sub find_ip_rule() {
                 and $rule_href->{'dst'} eq $dst) {
             if ($extended_href) {
                 my $found = 1;
-                for my $key qw(
+                for my $key (qw(
                     protocol
                     s_port
                     d_port
                     to_ip
                     to_port
-                ) {
+                )) {
                     if (defined $extended_href->{$key}) {
                         unless ($extended_href->{$key}
                                 eq $rule_href->{$key}) {
