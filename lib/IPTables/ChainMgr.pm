@@ -47,13 +47,17 @@ sub new() {
         unless -e $self->{'_iptables'};
     croak "[*] $self->{'_iptables'} not executable.\n"
         unless -x $self->{'_iptables'};
+
+    $self->{'_ipt_bin_name'} = 'iptables';
+    $self->{'_ipt_bin_name'} = $1 if $self->{'_iptables'} =~ m|.*/(\S+)|;
+
     bless $self, $class;
 }
 
 sub chain_exists() {
     my $self = shift;
     my $table = shift || croak '[*] Must specify a table, e.g. "filter".';
-    my $chain = shift || croak '[*] Must specify a chain to create.';
+    my $chain = shift || croak '[*] Must specify a chain to check.';
     my $iptables = $self->{'_iptables'};
 
     ### see if the chain exists
@@ -108,11 +112,14 @@ sub delete_chain() {
     ### could not flush the chain
     return 0, $out_aref, $err_aref unless $rv;
 
+    my $ip_any_net = '0.0.0.0/0';
+    $ip_any_net = '::/0' if $self->{'_ipt_bin_name'} eq 'ip6tables';
+
     ### find and delete jump rules to this chain (we can't delete
     ### the chain until there are no references to it)
     my ($rulenum, $num_chain_rules)
-        = $self->find_ip_rule('0.0.0.0/0',
-            '0.0.0.0/0', $table, $jump_from_chain, $del_chain, {});
+        = $self->find_ip_rule($ip_any_net, $ip_any_net,
+            $table, $jump_from_chain, $del_chain, {});
 
     if ($rulenum) {
         $self->run_ipt_cmd(
@@ -368,6 +375,7 @@ sub find_ip_rule() {
     my $chain = shift || croak '[*] Must specify iptables chain.';
     my $target = shift ||
         croak '[*] Must specify iptables target (this may be a chain).';
+
     ### optionally add port numbers and protocols, etc.
     my $extended_href = shift || {};
     my $iptables = $self->{'_iptables'};
@@ -440,17 +448,21 @@ sub normalize_net() {
     my $self = shift;
     my $net  = shift || croak '[*] Must specify net.';
 
-    ### regex to match an IP address
-    my $ip_re = '(?:\d{1,3}\.){3}\d{1,3}';
+    my $normalized_net = $net;  ### establish default
 
-    my $normalized_net = '';
-    if ($net =~ m|$ip_re/$ip_re| or $net =~ m|$ip_re/\d+|) {
-        my $n = new NetAddr::IP $net
-            or croak "[*] Could not acquire NetAddr::IP object for $net";
-        $normalized_net = $n->network()->cidr();
-    } else {
-        ### it is a hostname or an individual IP
-        $normalized_net = $net;
+    ### regex to match an IPv4 address
+    my $ipv4_re = qr/(?:\d{1,3}\.){3}\d{1,3}/;
+
+    if ($net =~ m|/| and $net =~ $ipv4_re or $net =~ m|:|) {
+        if ($net =~ m|:|) {  ### an IPv6 address
+            my $n = new6 NetAddr::IP $net
+                or croak "[*] Could not acquire NetAddr::IP object for $net";
+            $normalized_net = lc($n->network()->short()) . '/' . $n->masklen();
+        } else {
+            my $n = new NetAddr::IP $net
+                or croak "[*] Could not acquire NetAddr::IP object for $net";
+            $normalized_net = $n->network()->cidr();
+        }
     }
     return $normalized_net;
 }
@@ -469,9 +481,12 @@ sub add_jump_rule() {
             "not allowed."], [];
     }
 
+    my $ip_any_net = '0.0.0.0/0';
+    $ip_any_net = '::/0' if $self->{'_ipt_bin_name'} eq 'ip6tables';
+
     ### first check to see if the jump rule already exists
     my ($rule_position, $num_chain_rules)
-        = $self->find_ip_rule('0.0.0.0/0', '0.0.0.0/0', $table,
+        = $self->find_ip_rule($ip_any_net, $ip_any_net, $table,
             $from_chain, $to_chain, {});
 
     ### check to see if the insertion index ($rulenum) is too big
@@ -519,8 +534,10 @@ sub run_ipt_cmd() {
     my $ipt_exec_sleep = $self->{'_ipt_exec_sleep'};
     my $sigchld_handler = $self->{'_sigchld_handler'};
 
+
     croak "[*] $cmd does not look like an iptables command."
-        unless $cmd =~ m|^\s*iptables| or $cmd =~ m|^\S+/iptables|;
+        unless $cmd =~ m|^\s*iptables| or $cmd =~ m|^\S+/iptables|
+            or $cmd =~ m|^\s*ip6tables| or $cmd =~ m|^\S+/ip6tables|;
 
     my $rv = 1;
     my @stdout = ();
@@ -852,18 +869,16 @@ and stderr.  Here is an example to list all rules in the user-defined chain
 =head1 SEE ALSO
 
 The IPTables::ChainMgr extension is closely associated with the IPTables::Parse
-extension, and both are heavily used by the psad, fwsnort, and fwknop projects
-to manipulate iptables policies based on various criteria (see the psad(8),
-fwsnort(8), and fwknop(8) man pages).  As always, the iptables(8) man page
-provides the best information on command line execution and theory behind
-iptables.
+extension, and both are heavily used by the psad and fwsnort projects to
+manipulate iptables policies based on various criteria (see the psad(8) and
+fwsnort(8) man pages).  As always, the iptables(8) man page provides the best
+information on command line execution and theory behind iptables.
 
 Although there is no mailing that is devoted specifically to the IPTables::ChainMgr
 extension, questions about the extension will be answered on the following
 lists:
 
   The psad mailing list: http://lists.sourceforge.net/lists/listinfo/psad-discuss
-  The fwknop mailing list: http://lists.sourceforge.net/lists/listinfo/fwknop-discuss
   The fwsnort mailing list: http://lists.sourceforge.net/lists/listinfo/fwsnort-discuss
 
 The latest version of the IPTables::ChainMgr extension can be found at:
@@ -881,8 +896,8 @@ Thanks to the following people:
 =head1 AUTHOR
 
 The IPTables::ChainMgr extension was written by Michael Rash F<E<lt>mbr@cipherdyne.orgE<gt>>
-to support the psad, fwknop, and fwsnort projects.  Please send email to
-this address if there are any questions, comments, or bug reports.
+to support the psad and fwsnort projects.  Please send email to this address if
+there are any questions, comments, or bug reports.
 
 =head1 COPYRIGHT AND LICENSE
 
