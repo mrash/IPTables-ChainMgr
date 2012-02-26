@@ -1,5 +1,29 @@
 Revision history for Perl extension IPTables::ChainMgr.
 
+0.9.9 Sun Feb 26 14:03:24 2012
+    - Updated to handle IPv6 via ip6tables.  All functions in the previous
+      version of this module now work with ip6tables - just instantiate the
+      IPTables::ChainMgr object with something like the following:
+
+        my %opts = (
+            'iptables' => $ip6tables_bin,
+            'iptout'   => '/tmp/ip6tables.out',
+            'ipterr'   => '/tmp/ip6tables.err',
+            'debug'    => 0,
+            'verbose'  => 0
+        );
+
+    - Switched to using NetAddr::IP instead of the old Net::IPv4Addr module.
+      This greatly assisted in the ability to offer IPv6 support via ip6tables.
+    - Bug fix to ensure proper handling of empty 'extended' hashes via the
+      'keys' function.
+    - (Miloslav Trmac) Bug fix for "Use of qw(...) as parentheses is
+      deprecated" warnings as described here:
+            https://bugzilla.redhat.com/show_bug.cgi?id=771781
+    - Migrated to git for source control:
+            http://www.cipherdyne.org/cgi-bin/gitweb.cgi?p=IPTables-ChainMgr.git;a=summary
+            https://github.com/mrash/IPTables-ChainMgr
+
 0.9 Sat Feb 11 23:11:45 2008
     - Added Net::IPv4Addr prerequisite to Makefile.PL (patch submitted by
       Dominik Gehl).
