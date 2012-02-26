@@ -10,7 +10,7 @@
 #
 # Author: Michael Rash (mbr@cipherdyne.org)
 #
-# Version: 0.9
+# Version: 0.9.9
 #
 ##############################################################################
 #
@@ -26,7 +26,7 @@ use strict;
 use warnings;
 use vars qw($VERSION);
 
-$VERSION = '0.9';
+$VERSION = '0.9.9';
 
 sub new() {
     my $class = shift;
