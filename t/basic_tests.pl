@@ -1,11 +1,14 @@
 #!/usr/bin/perl -w
 
-use lib '../lib';
-use lib '../../IPTables-Parse.git/lib';
+use lib (qw|../lib ../../IPTables-Parse/lib ../../IPTables-Parse.git/lib|);
 use Data::Dumper;
 use strict;
 
-require IPTables::ChainMgr;
+eval {
+    require IPTables::ChainMgr;
+};
+die "[*] Adjust 'use lib' statement to include ",
+    "directory where IPTables::Parse lives" if $@;
 
 #==================== config =====================
 my $iptables_bin  = '/sbin/iptables';
@@ -120,7 +123,9 @@ sub test_cycle() {
     &chain_does_not_exist_test($ipt_obj, $test_table, $test_chain);
     &create_chain_test($ipt_obj, $test_table, $test_chain);
     &add_rules_tests($ipt_obj, $test_table, $test_chain);
+    &find_rules_tests($ipt_obj, $test_table, $test_chain);
     &add_jump_rule_test($ipt_obj, $test_table, $test_chain);
+    &find_jump_rule_test($ipt_obj, $test_table, $test_chain);
     &flush_chain_test($ipt_obj, $test_table, $test_chain);
     &delete_chain_test($ipt_obj, $test_table, $test_jump_from_chain, $test_chain);
 
@@ -176,7 +181,7 @@ sub flush_chain_test() {
 sub add_jump_rule_test() {
     my ($ipt_obj, $test_table, $test_chain) = @_;
 
-    &dots_print("add_jump_rules(): $test_table $test_jump_from_chain -> $test_chain ");
+    &dots_print("add_jump_rule(): $test_table $test_jump_from_chain -> $test_chain ");
     my ($rv, $out_ar, $err_ar) = $ipt_obj->add_jump_rule($test_table,
         $test_jump_from_chain, 1, $test_chain);
 
@@ -194,10 +199,36 @@ sub add_jump_rule_test() {
     return;
 }
 
+sub find_jump_rule_test() {
+    my ($ipt_obj, $test_table, $test_chain) = @_;
+
+    my $ip_any_net = '0.0.0.0/0';
+    $ip_any_net = '::/0' if $ipt_obj->{'_ipt_bin_name'} eq 'ip6tables';
+
+    &dots_print("find jump rule: $test_table $test_jump_from_chain -> $test_chain ");
+
+    my ($rule_position, $num_chain_rules) = $ipt_obj->find_ip_rule($ip_any_net,
+            $ip_any_net, $test_table, $test_jump_from_chain, $test_chain, {});
+
+    $executed++;
+
+    if ($rule_position > 0) {
+        &logr("pass ($executed)\n");
+        $passed++;
+    } else {
+        &logr("fail ($executed)\n");
+        &logr("   Could not find jump rule\n");
+        $failed++;
+    }
+
+    return;
+}
+
+
 sub add_rules_tests() {
     my ($ipt_obj, $test_table, $test_chain) = @_;
 
-    my $src_ip = '10.1.2.3';
+    my $src_ip = '10.1.2.3/24';
     my $dst_ip = '192.168.1.2';
 
     if ($ipt_obj->{'_ipt_bin_name'} eq 'ip6tables') {
@@ -217,7 +248,38 @@ sub add_rules_tests() {
             $passed++;
         } else {
             &logr("fail ($executed)\n");
-            &logr("   Could not $src_ip -> $dst_ip $target rule\n");
+            &logr("   Could not add $src_ip -> $dst_ip $target rule\n");
+            $failed++;
+        }
+    }
+
+    return;
+}
+
+sub find_rules_tests() {
+    my ($ipt_obj, $test_table, $test_chain) = @_;
+
+    my $src_ip = '10.1.2.3/24';
+    my $dst_ip = '192.168.1.2';
+
+    if ($ipt_obj->{'_ipt_bin_name'} eq 'ip6tables') {
+        $src_ip = '0000:0000:0000:00FF:0000:0000:0000:0001/FFFF:FFFF:FFFF:FFFF:0000:0000:0000:0000';
+        $dst_ip = '0000:0000:00AA:0000:0000:AA00:0000:0001/64';
+    }
+
+    for my $target (qw/LOG ACCEPT RETURN/) {
+        &dots_print("find rule: $test_table $test_chain $src_ip -> $dst_ip $target ");
+        my ($rule_position, $num_chain_rules) = $ipt_obj->find_ip_rule($src_ip,
+                $dst_ip, $test_table, $test_chain, $target, {'normalize' => 1});
+
+        $executed++;
+
+        if ($rule_position > 0) {
+            &logr("pass ($executed)\n");
+            $passed++;
+        } else {
+            &logr("fail ($executed)\n");
+            &logr("   Could not find $src_ip -> $dst_ip $target rule\n");
             $failed++;
         }
     }
