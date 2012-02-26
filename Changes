@@ -20,6 +20,7 @@ Revision history for Perl extension IPTables::ChainMgr.
     - (Miloslav Trmac) Bug fix for "Use of qw(...) as parentheses is
       deprecated" warnings as described here:
             https://bugzilla.redhat.com/show_bug.cgi?id=771781
+    - Added a test suite at: t/basic_tests.pl
     - Migrated to git for source control:
             http://www.cipherdyne.org/cgi-bin/gitweb.cgi?p=IPTables-ChainMgr.git;a=summary
             https://github.com/mrash/IPTables-ChainMgr
