@@ -18,6 +18,13 @@ my $test_table = 'filter';
 my $test_chain = 'CHAINMGRTEST';
 my $test_jump_from_chain = 'INPUT';
 
+### normalization will produce the correct network addresses ("10.1.2.3/24" is
+### deliberate)
+my $ipv4_src = '10.1.2.3/24';
+my $ipv4_dst = '192.168.1.2';
+my $ipv6_src = 'fe80::200:f8ff:fe21:67cf';
+my $ipv6_dst = '0000:0000:00AA:0000:0000:AA00:0000:0001/64';
+
 my $logfile   = 'test.log';
 my $PRINT_LEN = 68;
 my $chain_past_end = 1000;
@@ -124,6 +131,8 @@ sub test_cycle() {
     &create_chain_test($ipt_obj, $test_table, $test_chain);
     &add_rules_tests($ipt_obj, $test_table, $test_chain);
     &find_rules_tests($ipt_obj, $test_table, $test_chain);
+    &add_extended_rules_tests($ipt_obj, $test_table, $test_chain);
+    &find_extended_rules_tests($ipt_obj, $test_table, $test_chain);
     &add_jump_rule_test($ipt_obj, $test_table, $test_chain);
     &find_jump_rule_test($ipt_obj, $test_table, $test_chain);
     &flush_chain_test($ipt_obj, $test_table, $test_chain);
@@ -228,16 +237,16 @@ sub find_jump_rule_test() {
 sub add_rules_tests() {
     my ($ipt_obj, $test_table, $test_chain) = @_;
 
-    my $src_ip = '10.1.2.3/24';
-    my $dst_ip = '192.168.1.2';
+    my $src_ip = $ipt_obj->normalize_net($ipv4_src);
+    my $dst_ip = $ipt_obj->normalize_net($ipv4_dst);
 
     if ($ipt_obj->{'_ipt_bin_name'} eq 'ip6tables') {
-        $src_ip = '0000:0000:0000:00FF:0000:0000:0000:0001/FFFF:FFFF:FFFF:FFFF:0000:0000:0000:0000';
-        $dst_ip = '0000:0000:00AA:0000:0000:AA00:0000:0001/64';
+        $src_ip = $ipt_obj->normalize_net($ipv6_src);
+        $dst_ip = $ipt_obj->normalize_net($ipv6_dst);
     }
 
     for my $target (qw/LOG ACCEPT RETURN/) {
-        &dots_print("add_rules(): $test_table $test_chain $src_ip -> $dst_ip $target ");
+        &dots_print("add_ip_rules(): $test_table $test_chain $src_ip -> $dst_ip $target ");
         my ($rv, $out_ar, $err_ar) = $ipt_obj->add_ip_rule($src_ip,
                 $dst_ip, $chain_past_end, $test_table, $test_chain, $target, {});
 
@@ -259,12 +268,12 @@ sub add_rules_tests() {
 sub find_rules_tests() {
     my ($ipt_obj, $test_table, $test_chain) = @_;
 
-    my $src_ip = '10.1.2.3/24';
-    my $dst_ip = '192.168.1.2';
+    my $src_ip = $ipt_obj->normalize_net($ipv4_src);
+    my $dst_ip = $ipt_obj->normalize_net($ipv4_dst);
 
     if ($ipt_obj->{'_ipt_bin_name'} eq 'ip6tables') {
-        $src_ip = '0000:0000:0000:00FF:0000:0000:0000:0001/FFFF:FFFF:FFFF:FFFF:0000:0000:0000:0000';
-        $dst_ip = '0000:0000:00AA:0000:0000:AA00:0000:0001/64';
+        $src_ip = $ipt_obj->normalize_net($ipv6_src);
+        $dst_ip = $ipt_obj->normalize_net($ipv6_dst);
     }
 
     for my $target (qw/LOG ACCEPT RETURN/) {
@@ -286,6 +295,105 @@ sub find_rules_tests() {
 
     return;
 }
+
+sub add_extended_rules_tests() {
+    my ($ipt_obj, $test_table, $test_chain) = @_;
+
+    my $src_ip = $ipt_obj->normalize_net($ipv4_src);
+    my $dst_ip = $ipt_obj->normalize_net($ipv4_dst);
+
+    if ($ipt_obj->{'_ipt_bin_name'} eq 'ip6tables') {
+        $src_ip = $ipt_obj->normalize_net($ipv6_src);
+        $dst_ip = $ipt_obj->normalize_net($ipv6_dst);
+    }
+
+    for my $target (qw/LOG ACCEPT RETURN/) {
+        &dots_print("add_ip_rules(): $test_table $test_chain TCP $src_ip(0) -> $dst_ip(80) $target ");
+        my ($rv, $out_ar, $err_ar) = $ipt_obj->add_ip_rule($src_ip,
+                $dst_ip, $chain_past_end, $test_table, $test_chain, $target,
+                {'protocol' => 'tcp', 's_port' => 0, 'd_port' => 80});
+
+        $executed++;
+
+        if ($rv) {
+            &logr("pass ($executed)\n");
+            $passed++;
+        } else {
+            &logr("fail ($executed)\n");
+            &logr("   Could not add TCP $src_ip(0) -> $dst_ip(80) $target rule\n");
+            $failed++;
+        }
+
+        &dots_print("add_ip_rules(): $test_table $test_chain UDP $src_ip(0) -> $dst_ip(53) $target ");
+        ($rv, $out_ar, $err_ar) = $ipt_obj->add_ip_rule($src_ip,
+                $dst_ip, $chain_past_end, $test_table, $test_chain, $target,
+                {'protocol' => 'udp', 's_port' => 0, 'd_port' => 53});
+
+        $executed++;
+
+        if ($rv) {
+            &logr("pass ($executed)\n");
+            $passed++;
+        } else {
+            &logr("fail ($executed)\n");
+            &logr("   Could not add UDP $src_ip(0) -> $dst_ip(53) $target rule\n");
+            $failed++;
+        }
+
+    }
+
+    return;
+}
+
+sub find_extended_rules_tests() {
+    my ($ipt_obj, $test_table, $test_chain) = @_;
+
+    my $src_ip = $ipt_obj->normalize_net($ipv4_src);
+    my $dst_ip = $ipt_obj->normalize_net($ipv4_dst);
+
+    if ($ipt_obj->{'_ipt_bin_name'} eq 'ip6tables') {
+        $src_ip = $ipt_obj->normalize_net($ipv6_src);
+        $dst_ip = $ipt_obj->normalize_net($ipv6_dst);
+    }
+
+    for my $target (qw/LOG ACCEPT RETURN/) {
+        &dots_print("find rule: $test_table $test_chain TCP $src_ip(0) -> $dst_ip(80) $target ");
+        my ($rule_position, $num_chain_rules) = $ipt_obj->find_ip_rule($src_ip,
+                $dst_ip, $test_table, $test_chain, $target,
+                {'normalize' => 1, 'protocol' => 'tcp', 's_port' => 0, 'd_port' => 80});
+
+        $executed++;
+
+        if ($rule_position > 0) {
+            &logr("pass ($executed)\n");
+            $passed++;
+        } else {
+            &logr("fail ($executed)\n");
+            &logr("   Could not find TCP $src_ip(0) -> $dst_ip(80) $target rule\n");
+            $failed++;
+        }
+
+        &dots_print("find rule: $test_table $test_chain UDP $src_ip(0) -> $dst_ip(53) $target ");
+        ($rule_position, $num_chain_rules) = $ipt_obj->find_ip_rule($src_ip,
+                $dst_ip, $test_table, $test_chain, $target,
+                {'normalize' => 1, 'protocol' => 'udp', 's_port' => 0, 'd_port' => 53});
+
+        $executed++;
+
+        if ($rule_position > 0) {
+            &logr("pass ($executed)\n");
+            $passed++;
+        } else {
+            &logr("fail ($executed)\n");
+            &logr("   Could not find UDP $src_ip(0) -> $dst_ip(53) $target rule\n");
+            $failed++;
+        }
+
+    }
+
+    return;
+}
+
 
 sub create_chain_test() {
     my ($ipt_obj, $test_table, $test_chain) = @_;
