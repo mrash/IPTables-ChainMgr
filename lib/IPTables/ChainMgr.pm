@@ -157,7 +157,7 @@ sub append_ip_rule() {
 
     if ($rule_position) {
         my $msg = '';
-        if ($extended_href) {
+        if (keys %$extended_href) {
             $msg = "Table: $table, chain: $chain, $normalized_src -> " .
                 "$normalized_dst ";
             for my $key (qw(protocol s_port d_port mac_source)) {
@@ -177,7 +177,7 @@ sub append_ip_rule() {
     my $msg     = '';
     my $idx_err = '';
 
-    if ($extended_href) {
+    if (keys %$extended_href) {
         $ipt_cmd = "$iptables -t $table -A $chain ";
         $ipt_cmd .= "-p $extended_href->{'protocol'} "
             if defined $extended_href->{'protocol'};
@@ -246,7 +246,7 @@ sub add_ip_rule() {
 
     if ($rule_position) {
         my $msg = '';
-        if ($extended_href) {
+        if (keys %$extended_href) {
             $msg = "Table: $table, chain: $chain, $normalized_src -> " .
                 "$normalized_dst ";
             for my $key (qw(protocol s_port d_port mac_source)) {
@@ -276,7 +276,7 @@ sub add_ip_rule() {
     }
     $rulenum = 1 if $rulenum == 0;
 
-    if ($extended_href) {
+    if (keys %$extended_href) {
         $ipt_cmd = "$iptables -t $table -I $chain $rulenum ";
         $ipt_cmd .= "-p $extended_href->{'protocol'} "
             if defined $extended_href->{'protocol'};
@@ -348,7 +348,7 @@ sub delete_ip_rule() {
     }
 
     my $extended_msg = '';
-    if ($extended_href) {
+    if (keys %$extended_href) {
         for my $key (qw(protocol s_port d_port mac_source)) {
             $extended_msg .= "$key: $extended_href->{$key} "
                 if defined $extended_href->{$key};
@@ -402,12 +402,17 @@ sub find_ip_rule() {
 
     my $chain_aref = $ipt_parse->chain_rules($table, $chain);
 
+    $src = $self->normalize_net($src) if defined $extended_href->{'normalize'}
+        and $extended_href->{'normalize'};
+    $dst = $self->normalize_net($dst) if defined $extended_href->{'normalize'}
+        and $extended_href->{'normalize'};
+
     my $rulenum = 1;
     for my $rule_href (@$chain_aref) {
         if ($rule_href->{'target'} eq $target
                 and $rule_href->{'src'} eq $src
                 and $rule_href->{'dst'} eq $dst) {
-            if ($extended_href) {
+            if (keys %$extended_href) {
                 my $found = 1;
                 for my $key (qw(
                     protocol
