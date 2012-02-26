@@ -651,14 +651,16 @@ __END__
 
 =head1 NAME
 
-IPTables::ChainMgr - Perl extension for manipulating iptables policies
+IPTables::ChainMgr - Perl extension for manipulating iptables and ip6tables policies
 
 =head1 SYNOPSIS
 
   use IPTables::ChainMgr;
 
+  my $ipt_bin = '/sbin/iptables'; # can set this to /sbin/ip6tables
+
   my %opts = (
-      'iptables' => '/sbin/iptables',
+      'iptables' => $ipt_bin,
       'iptout'   => '/tmp/iptables.out',
       'ipterr'   => '/tmp/iptables.err',
       'debug'    => 0,
@@ -695,36 +697,71 @@ IPTables::ChainMgr - Perl extension for manipulating iptables policies
   # create new iptables chain in the 'filter' table
   $ipt_obj->create_chain('filter', 'CUSTOM');
 
+  # translate a network into the same representation that iptables or
+  # ip6tables uses (e.g. '10.1.2.3/24' is properly represented as '10.1.2.0/24',
+  # and '0000:0000:00AA:0000:0000:AA00:0000:0001/64' = '0:0:aa::/64')
+  $normalized_net = $ipt_obj->normalize_net('10.1.2.3/24');
+
   # add rule to jump packets from the INPUT chain into CUSTOM at the
   # 4th rule position
   $ipt_obj->add_jump_rule('filter', 'INPUT', 4, 'CUSTOM');
 
-  # find rule that allows all traffic from 10.1.2.3 to 192.168.1.2
-  ($rv, $rule_num) = $ipt_obj->find_ip_rule('10.1.2.3', '192.168.1.2',
-      'filter', 'INPUT', 'ACCEPT', {});
+  # find rule that allows all traffic from 10.1.2.0/24 to 192.168.1.2
+  ($rv, $rule_num) = $ipt_obj->find_ip_rule('10.1.2.0/24', '192.168.1.2',
+      'filter', 'INPUT', 'ACCEPT', {'normalize' => 1});
 
-  # find rule that allows all TCP port 80 traffic from 10.1.2.3 to
+  # find rule that allows all TCP port 80 traffic from 10.1.2.0/24 to
   # 192.168.1.1
-  ($rv, $rule_num) = $ipt_obj->find_ip_rule('10.1.2.3', '192.168.1.2',
-      'filter', 'INPUT', 'ACCEPT', {'protocol' => 'tcp', 's_port' => 0,
-      'd_port' => 80});
+  ($rv, $rule_num) = $ipt_obj->find_ip_rule('10.1.2.0/24', '192.168.1.2',
+      'filter', 'INPUT', 'ACCEPT', {'normalize' => 1, 'protocol' => 'tcp',
+      's_port' => 0, 'd_port' => 80});
 
   # add rule at the 5th rule position to allow all traffic from
-  # 10.1.2.3 to 192.168.1.2 via the INPUT chain in the filter table
-  ($rv, $out_ar, $errs_ar) = $ipt_obj->add_ip_rule('10.1.2.3',
+  # 10.1.2.0/24 to 192.168.1.2 via the INPUT chain in the filter table
+  ($rv, $out_ar, $errs_ar) = $ipt_obj->add_ip_rule('10.1.2.0/24',
       '192.168.1.2', 5, 'filter', 'INPUT', 'ACCEPT', {});
 
   # add rule at the 4th rule position to allow all traffic from
-  # 10.1.2.3 to 192.168.1.2 over TCP port 80 via the CUSTOM chain
+  # 10.1.2.0/24 to 192.168.1.2 over TCP port 80 via the CUSTOM chain
   # in the filter table
-  ($rv, $out_ar, $errs_ar) = $ipt_obj->add_ip_rule('10.1.2.3',
+  ($rv, $out_ar, $errs_ar) = $ipt_obj->add_ip_rule('10.1.2.0/24',
       '192.168.1.2', 4, 'filter', 'CUSTOM', 'ACCEPT',
       {'protocol' => 'tcp', 's_port' => 0, 'd_port' => 80});
 
   # append rule at the end of the CUSTOM chain in the filter table to
-  # allow all traffic from 10.1.2.3 to 192.168.1.2 via port 80
-  ($rv, $out_ar, $errs_ar) = $ipt_obj->append_ip_rule('10.1.2.3',
+  # allow all traffic from 10.1.2.0/24 to 192.168.1.2 via port 80
+  ($rv, $out_ar, $errs_ar) = $ipt_obj->append_ip_rule('10.1.2.0/24',
       '192.168.1.2', 'filter', 'CUSTOM', 'ACCEPT',
+      {'protocol' => 'tcp', 's_port' => 0, 'd_port' => 80});
+
+  # for each of the examples above, here are ip6tables analogs
+  # (requires instantiating the IPTables::ChainMgr object with
+  # /sbin/ip6tables): find rule that allows all traffic from fe80::200:f8ff:fe21:67cf
+  # to 0:0:aa::/64
+  ($rv, $rule_num) = $ipt_obj->find_ip_rule('fe80::200:f8ff:fe21:67cf', '0:0:aa::/64',
+      'filter', 'INPUT', 'ACCEPT', {'normalize' => 1});
+
+  # find rule that allows all TCP port 80 traffic from fe80::200:f8ff:fe21:67c to 0:0:aa::/64
+  ($rv, $rule_num) = $ipt_obj->find_ip_rule('fe80::200:f8ff:fe21:67cf', '0:0:aa::/64',
+      'filter', 'INPUT', 'ACCEPT', {'normalize' => 1, 'protocol' => 'tcp',
+      's_port' => 0, 'd_port' => 80});
+
+  # add rule at the 5th rule position to allow all traffic from
+  # fe80::200:f8ff:fe21:67c to 0:0:aa::/64 via the INPUT chain in the filter table
+  ($rv, $out_ar, $errs_ar) = $ipt_obj->add_ip_rule('fe80::200:f8ff:fe21:67cf',
+      '0:0:aa::/64', 5, 'filter', 'INPUT', 'ACCEPT', {});
+
+  # add rule at the 4th rule position to allow all traffic from
+  # fe80::200:f8ff:fe21:67c to 0:0:aa::/64 over TCP port 80 via the CUSTOM chain
+  # in the filter table
+  ($rv, $out_ar, $errs_ar) = $ipt_obj->add_ip_rule('fe80::200:f8ff:fe21:67cf',
+      '0:0:aa::/64', 4, 'filter', 'CUSTOM', 'ACCEPT',
+      {'protocol' => 'tcp', 's_port' => 0, 'd_port' => 80});
+
+  # append rule at the end of the CUSTOM chain in the filter table to
+  # allow all traffic from fe80::200:f8ff:fe21:67c to 0:0:aa::/64 via port 80
+  ($rv, $out_ar, $errs_ar) = $ipt_obj->append_ip_rule('fe80::200:f8ff:fe21:67cf',
+      '0:0:aa::/64', 'filter', 'CUSTOM', 'ACCEPT',
       {'protocol' => 'tcp', 's_port' => 0, 'd_port' => 80});
 
   # run an arbitrary iptables command and collect the output
@@ -734,13 +771,14 @@ IPTables::ChainMgr - Perl extension for manipulating iptables policies
 =head1 DESCRIPTION
 
 The C<IPTables::ChainMgr> package provides an interface to manipulate iptables
-policies on Linux systems through the direct execution of iptables commands.
-Although making a perl extension of libiptc provided by the iptables project is
-possible (and has been done by the IPTables::libiptc module available from CPAN),
-it is also easy enough to just execute iptables commands directly in order to
-both parse and change the configuration of the policy.  Further, this simplifies
-installation since the only external requirement is (in the spirit of scripting)
-to be able to point IPTables::ChainMgr at an installed iptables binary instead
+and ip6tables policies on Linux systems through the direct execution of
+iptables/ip6tables commands.  Although making a perl extension of libiptc
+provided by the iptables project is possible (and has been done by the
+IPTables::libiptc module available from CPAN), it is also easy enough to just
+execute iptables/ip6tables commands directly in order to both parse and change
+the configuration of the policy.  Further, this simplifies installation since
+the only external requirement is (in the spirit of scripting) to be able to
+point IPTables::ChainMgr at an installed iptables or ip6tables binary instead
 of having to compile against a library.
 
 =head1 FUNCTIONS
@@ -754,18 +792,21 @@ functions:
 
 This function tests whether or not a chain (e.g. 'INPUT') exists within the
 specified table (e.g. 'filter').  This is most useful to test whether
-a custom chain has been added to the running iptables policy.  The return values
-are (as with many IPTables::ChainMgr functions) an array of three things: a
-numeric value, and both the stdout and stderr of the iptables command in the
-form of array references.  So, an example invocation of the chain_exists()
-function would be:
+a custom chain has been added to the running iptables/ip6tables policy.  The
+return values are (as with many IPTables::ChainMgr functions) an array of
+three things: a numeric value, and both the stdout and stderr of the iptables
+or ip6tables command in the form of array references.  So, an example
+invocation of the chain_exists() function would be:
 
   ($rv, $out_ar, $errs_ar) = $ipt_obj->chain_exists('filter', 'CUSTOM');
 
 If $rv is 1, then the CUSTOM chain exists in the filter table, and 0 otherwise.
 The $out_ar array reference contains the output of the command "/sbin/iptables -t filter -v -n -L CUSTOM",
 which will contain the rules in the CUSTOM chain (if it exists) or nothing (if not).
-The $errs_ar array reference contains the stderr of the iptables command.
+The $errs_ar array reference contains the stderr of the iptables command.  As
+with all IPTables::ChainMgr functions, if the IPTables::ChainMgr object was
+instantiated with the ip6tables binary path, then the above command would
+become "/sbin/ip6tables -t filter -v -n -L CUSTOM".
 
 =item create_chain($table, $chain)
 
@@ -775,7 +816,8 @@ values are given like so:
   ($rv, $out_ar, $errs_ar) = $ipt_obj->create_chain('filter', 'CUSTOM');
 
 Behind the scenes, the create_chain() function in the example above runs the
-iptables command "/sbin/iptables -t filter -N CUSTOM".
+iptables command "/sbin/iptables -t filter -N CUSTOM", or for ip6tables
+"/sbin/ip6tables -t filter -N CUSTOM".
 
 =item flush_chain($table, $chain)
 
@@ -785,7 +827,7 @@ values are returned:
   ($rv, $out_ar, $errs_ar) = $ipt_obj->flush_chain('filter', 'CUSTOM');
 
 The flush_chain() function in the example above executes the iptables command
-"/sbin/iptables -t filter -F CUSTOM"
+"/sbin/iptables -t filter -F CUSTOM" or "/sbin/ip6tables -t filter -F CUSTOM".
 
 =item delete_chain($table, $jump_from_chain, $chain)
 
@@ -806,19 +848,34 @@ This function parses the specified chain to see if there is a rule that
 matches the $src, $dst, $target, and (optionally) any %extended_info
 criteria.  The return values are the rule number in the chain (or zero
 if it doesn't exist), and the total number of rules in the chain.  Below
-are two examples; the first is to find an ACCEPT rule for 10.1.2.3 to
+are four examples; the first is to find an ACCEPT rule for 10.1.2.0/24 to
 communicate with 192.168.1.2 in the INPUT chain, and the second is the
-same except that the rule is restricted to TCP port 80:
+same except that the rule is restricted to TCP port 80.  The third and
+forth examples illustrate ip6tables analogs of the first two examples
+with source IP fe80::200:f8ff:fe21:67cf/128 and destination network: 0:0:aa::/64
 
-  ($rulenum, $chain_rules) = $ipt_obj->find_ip_rule('10.1.2.3',
-      '192.168.1.2', 'filter', 'INPUT', 'ACCEPT', {});
+  ($rulenum, $chain_rules) = $ipt_obj->find_ip_rule('10.1.2.0/24',
+      '192.168.1.2', 'filter', 'INPUT', 'ACCEPT', {'normalize' => 1});
   if ($rulenum) {
       print "matched rule $rulenum out of $chain_rules rules\n";
   }
 
-  ($rulenum, $chain_rules) = $ipt_obj->find_ip_rule('10.1.2.3',
+  ($rulenum, $chain_rules) = $ipt_obj->find_ip_rule('10.1.2.0/24',
       '192.168.1.2', 'filter', 'INPUT', 'ACCEPT',
-      {'protocol' => 'tcp', 's_port' => 0, 'd_port' => 80});
+      {'normalize' => 1, 'protocol' => 'tcp', 's_port' => 0, 'd_port' => 80});
+  if ($rulenum) {
+      print "matched rule $rulenum out of $chain_rules rules\n";
+  }
+
+  ($rulenum, $chain_rules) = $ipt_obj->find_ip_rule('fe80::200:f8ff:fe21:67cf/128',
+    '0:0:aa::/64', 'filter', 'INPUT', 'ACCEPT', {'normalize' => 1});
+  if ($rulenum) {
+      print "matched rule $rulenum out of $chain_rules rules\n";
+  }
+
+  ($rulenum, $chain_rules) = $ipt_obj->find_ip_rule('fe80::200:f8ff:fe21:67cf/128',
+      '0:0:aa::/64', 'filter', 'INPUT', 'ACCEPT',
+      {'normalize' => 1, 'protocol' => 'tcp', 's_port' => 0, 'd_port' => 80});
   if ($rulenum) {
       print "matched rule $rulenum out of $chain_rules rules\n";
   }
@@ -850,6 +907,15 @@ example to force all packets regardless of source or destination to be
 jumped to the CUSTOM chain from the INPUT chain at rule 4:
 
   ($rv, $out_ar, $errs_ar) = $ipt_obj->add_jump_rule('filter', 'INPUT', 4, 'CUSTOM');
+
+=item normalize_net($net)
+
+This function translates an IP/network into the same representation that iptables
+or ip6tables uses upon listing a policy.  The first example shows an IPv4 network
+and how iptables lists it, and the second is an IPv6 network:
+
+  print $ipt_obj->normalize_net('10.1.2.3/24'), "\n" # prints '10.1.2.0/24'
+  print $ipt_obj->normalize_net('0000:0000:00AA:0000:0000:AA00:0000:0001/64'), "\n" # prints '0:0:aa::/64'
 
 =item run_ipt_cmd($cmd)
 
