@@ -1,5 +1,10 @@
 Revision history for Perl extension IPTables::ChainMgr.
 
+1.0 Mon Feb 27 21:02:44 2012
+    - Bug fix for missing IPTables::Parse dependency by applying patch from the
+      CPAN bug tracking system here:
+        https://rt.cpan.org/Ticket/Display.html?id=43302
+
 0.9.9 Sun Feb 26 14:03:24 2012
     - Updated to handle IPv6 via ip6tables.  All functions in the previous
       version of this module now work with ip6tables - just instantiate the
