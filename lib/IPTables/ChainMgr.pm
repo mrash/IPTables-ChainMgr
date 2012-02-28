@@ -1005,6 +1005,11 @@ The latest version of the IPTables::ChainMgr extension can be found at:
 
 http://www.cipherdyne.org/modules/
 
+Source control is provided by git:
+
+http://www.cipherdyne.org/git/IPTables-ChainMgr.git
+http://www.cipherdyne.org/cgi-bin/gitweb.cgi?p=IPTables-ChainMgr.git;a=summary
+
 =head1 CREDITS
 
 Thanks to the following people:

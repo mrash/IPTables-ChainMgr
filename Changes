@@ -1,6 +1,9 @@
 Revision history for Perl extension IPTables::ChainMgr.
 
-1.0 Mon Feb 27 21:02:44 2012
+1.0 Mon Feb 27 21:56:44 2012
+    - Added 'ctstate' and 'state' keys to extended hashes for find_ip_rule()
+      and add_ip_rule().  This commit fixes:
+        https://rt.cpan.org/Ticket/Display.html?id=67614
     - Bug fix for missing IPTables::Parse dependency by applying patch from the
       CPAN bug tracking system here:
         https://rt.cpan.org/Ticket/Display.html?id=43302
