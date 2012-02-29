@@ -1,5 +1,15 @@
 Revision history for Perl extension IPTables::ChainMgr.
 
+1.1 Tue Feb 28 21:15:11 2012
+    - Added META.{yml,json} files similarly to fixing this bug filed against
+      IPTables::Parse:
+        https://rt.cpan.org/Ticket/Display.html?id=75366
+    - Minor bug fix to ensure not to look for 'extended' hash keys in returned
+      IPTables::Parse data without an existence check first.
+    - Added the ability to specify 'ip6tables' when instantiating an
+      IPTables::ChainMgr object via 'new'.
+    - Updated license to the Artistic license.
+
 1.0 Mon Feb 27 21:56:44 2012
     - Added 'ctstate' and 'state' keys to extended hashes for find_ip_rule()
       and add_ip_rule().  This commit fixes:

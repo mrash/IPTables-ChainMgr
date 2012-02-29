@@ -33,7 +33,7 @@ sub new() {
     my %args  = @_;
 
     my $self = {
-        _iptables  => $args{'iptables'}  || '/sbin/iptables',
+        _iptables  => $args{'iptables'}  || $args{'ip6tables'} || '/sbin/iptables',
         _iptout    => $args{'iptout'}    || '/tmp/ipt.out',
         _ipterr    => $args{'ipterr'}    || '/tmp/ipt.err',
         _ipt_alarm => $args{'ipt_alarm'} || 30,
@@ -428,21 +428,26 @@ sub find_ip_rule() {
                     ctstate
                 )) {
                     if (defined $extended_href->{$key}) {
-                        if ($key eq 'state' or $key eq 'ctstate') {
-                            ### make sure that state ordering as reported
-                            ### by iptables is accounted for vs. what was
-                            ### supplied to the module
-                            unless (&state_compare($extended_href->{$key},
-                                    $rule_href->{$key})) {
-                                $found = 0;
-                                last;
+                        if (defined $rule_href->{$key}) {
+                            if ($key eq 'state' or $key eq 'ctstate') {
+                                ### make sure that state ordering as reported
+                                ### by iptables is accounted for vs. what was
+                                ### supplied to the module
+                                unless (&state_compare($extended_href->{$key},
+                                        $rule_href->{$key})) {
+                                    $found = 0;
+                                    last;
+                                }
+                            } else {
+                                unless ($extended_href->{$key}
+                                        eq $rule_href->{$key}) {
+                                    $found = 0;
+                                    last;
+                                }
                             }
                         } else {
-                            unless ($extended_href->{$key}
-                                    eq $rule_href->{$key}) {
-                                $found = 0;
-                                last;
-                            }
+                            $found = 0;
+                            last;
                         }
                     }
                 }
@@ -709,7 +714,7 @@ IPTables::ChainMgr - Perl extension for manipulating iptables and ip6tables poli
   my $ipt_bin = '/sbin/iptables'; # can set this to /sbin/ip6tables
 
   my %opts = (
-      'iptables' => $ipt_bin,
+      'iptables' => $ipt_bin, # can specify 'ip6tables' hash key instead
       'iptout'   => '/tmp/iptables.out',
       'ipterr'   => '/tmp/iptables.err',
       'debug'    => 0,
@@ -1026,11 +1031,14 @@ there are any questions, comments, or bug reports.
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2005-2012 by Michael Rash
+Copyright (C) 2005-2012 Michael Rash.  All rights reserved.
 
-This library is free software; you can redistribute it and/or modify
-it under the same terms as Perl itself, either Perl version 5.8.5 or,
-at your option, any later version of Perl 5 you may have available.
+This module is free software.  You can redistribute it and/or
+modify it under the terms of the Artistic License 2.0.  More information
+can be found here: http://www.perl.com/perl/misc/Artistic.html
 
+This program is distributed "as is" in the hope that it will be useful,
+but without any warranty; without even the implied warranty of
+merchantability or fitness for a particular purpose.
 
 =cut
