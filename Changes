@@ -1,5 +1,15 @@
 Revision history for Perl extension IPTables::ChainMgr.
 
+1.2 Fri Mar 02 21:09:57 2012
+    - Added set_chain_policy() function to allow built-in chain policies to be
+      set to the specified target.  iptables/ip6tables does not allow the
+      target to be set for non built-in chains.  Behind the scenes this
+      function runs the command "iptables -t <table> -P <chain> <target>".
+    - Minor update to print the iptables binary name in 'croak' error
+      conditions.  The binary name is either 'iptables' or 'ip6tables'.
+    - Minor perldoc updates to render links better (two spaces at the beginning
+      of lines).
+
 1.1 Tue Feb 28 21:15:11 2012
     - Added META.{yml,json} files similarly to fixing this bug filed against
       IPTables::Parse:

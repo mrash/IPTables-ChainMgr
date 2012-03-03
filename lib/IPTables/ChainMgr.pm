@@ -43,13 +43,13 @@ sub new() {
         _ipt_exec_sleep => $args{'ipt_exec_sleep'} || 0,
         _sigchld_handler => $args{'sigchld_handler'} || \&REAPER,
     };
-    croak "[*] $self->{'_iptables'} incorrect iptables path.\n"
+    $self->{'_ipt_bin_name'} = 'iptables';
+    $self->{'_ipt_bin_name'} = $1 if $self->{'_iptables'} =~ m|.*/(\S+)|;
+
+    croak "[*] $self->{'_iptables'} incorrect $self->{'_ipt_bin_name'} path.\n"
         unless -e $self->{'_iptables'};
     croak "[*] $self->{'_iptables'} not executable.\n"
         unless -x $self->{'_iptables'};
-
-    $self->{'_ipt_bin_name'} = 'iptables';
-    $self->{'_ipt_bin_name'} = $1 if $self->{'_iptables'} =~ m|.*/(\S+)|;
 
     bless $self, $class;
 }
@@ -132,14 +132,26 @@ sub delete_chain() {
     return $self->run_ipt_cmd("$iptables -t $table -X $del_chain");
 }
 
+sub set_chain_policy() {
+    my $self = shift;
+    my $table = shift || croak '[*] Must specify a table, e.g. "filter".';
+    my $chain = shift || croak '[*] Must specify a chain.';
+    my $target  = shift || croak qq|[-] Must specify an | .
+        qq|$self->{'_ipt_bin_name'} target, e.g. "DROP"|;
+    my $iptables = $self->{'_iptables'};
+
+    ### set the chain policy: note that $chain must be a built-in chain
+    return $self->run_ipt_cmd("$iptables -t $table -P $chain $target");
+}
+
 sub append_ip_rule() {
     my $self = shift;
     my $src = shift || croak '[-] Must specify a src address/network.';
     my $dst = shift || croak '[-] Must specify a dst address/network.';
     my $table   = shift || croak '[-] Must specify a table, e.g. "filter".';
     my $chain   = shift || croak '[-] Must specify a chain.';
-    my $target  = shift ||
-        croak '[-] Must specify a iptables target, e.g. "DROP"';
+    my $target  = shift || croak qq|[-] Must specify an | .
+        qq|$self->{'_ipt_bin_name'} target, e.g. "DROP"|;
 
     ### optionally add port numbers and protocols, etc.
     my $extended_href = shift || {};
@@ -229,7 +241,8 @@ sub add_ip_rule() {
     my $table   = shift || croak '[-] Must specify a table, e.g. "filter".';
     my $chain   = shift || croak '[-] Must specify a chain.';
     my $target  = shift ||
-        croak '[-] Must specify a iptables target, e.g. "DROP"';
+        croak qq|[-] Must specify an $self->{'_ipt_bin_name'} | .
+            qq|target, e.g. "DROP"|;
     ### optionally add port numbers and protocols, etc.
     my $extended_href = shift || {};
     my $iptables = $self->{'_iptables'};
@@ -330,8 +343,8 @@ sub delete_ip_rule() {
     my $dst = shift || croak '[-] Must specify a dst address/network.';
     my $table  = shift || croak '[-] Must specify a table, e.g. "filter".';
     my $chain  = shift || croak '[-] Must specify a chain.';
-    my $target = shift ||
-        croak '[-] Must specify a iptables target, e.g. "DROP"';
+    my $target = shift || croak qq|[-] Must specify an | .
+        qq|$self->{'_ipt_bin_name'} target, e.g. "DROP"|;
     ### optionally add port numbers and protocols, etc.
     my $extended_href = shift || {};
     my $iptables = $self->{'_iptables'};
@@ -375,10 +388,10 @@ sub find_ip_rule() {
     my $verbose = $self->{'_verbose'};
     my $src   = shift || croak '[*] Must specify source address.';
     my $dst   = shift || croak '[*] Must specify destination address.';
-    my $table = shift || croak '[*] Must specify iptables table.';
-    my $chain = shift || croak '[*] Must specify iptables chain.';
-    my $target = shift ||
-        croak '[*] Must specify iptables target (this may be a chain).';
+    my $table = shift || croak qq|[*] Must specify $self->{'_ipt_bin_name'} table.|;
+    my $chain = shift || croak qq|[*] Must specify $self->{'_ipt_bin_name'} chain.|;
+    my $target = shift || croak qq|[*] Must specify | .
+        qq|$self->{'_ipt_bin_name'} target (this may be a chain).|;
 
     ### optionally add port numbers and protocols, etc.
     my $extended_href = shift || {};
@@ -582,7 +595,8 @@ sub REAPER {
 
 sub run_ipt_cmd() {
     my $self  = shift;
-    my $cmd = shift || croak '[*] Must specify an iptables command to run.';
+    my $cmd = shift || croak qq|[*] Must specify an | .
+        qq|$self->{'_ipt_bin_name'} command to run.|;
     my $iptables  = $self->{'_iptables'};
     my $iptout    = $self->{'_iptout'};
     my $ipterr    = $self->{'_ipterr'};
@@ -594,7 +608,7 @@ sub run_ipt_cmd() {
     my $sigchld_handler = $self->{'_sigchld_handler'};
 
 
-    croak "[*] $cmd does not look like an iptables command."
+    croak "[*] $cmd does not look like an $self->{'_ipt_bin_name'} command."
         unless $cmd =~ m|^\s*iptables| or $cmd =~ m|^\S+/iptables|
             or $cmd =~ m|^\s*ip6tables| or $cmd =~ m|^\S+/ip6tables|;
 
@@ -619,7 +633,7 @@ sub run_ipt_cmd() {
         if ($debug or $verbose) {
             print $fh localtime() . " [+] IPTables::ChainMgr: ",
                 "sleeping for $ipt_exec_sleep seconds before ",
-                "executing iptables command.\n";
+                "executing $self->{'_ipt_bin_name'} command.\n";
         }
         sleep $ipt_exec_sleep;
     }
@@ -647,7 +661,8 @@ sub run_ipt_cmd() {
                 ### iptables should never take longer than 30 seconds to execute,
                 ### unless there is some absolutely enormous policy or the kernel
                 ### is exceedingly busy
-                local $SIG{'ALRM'} = sub {die "[*] iptables command timeout.\n"};
+                local $SIG{'ALRM'} = sub {die "[*] $self->{'_ipt_bin_name'} " .
+                    "command timeout.\n"};
                 alarm $ipt_alarm;
                 waitpid($ipt_pid, 0);
                 alarm 0;
@@ -656,7 +671,7 @@ sub run_ipt_cmd() {
                 kill 9, $ipt_pid unless kill 15, $ipt_pid;
             }
         } else {
-            croak "[*] Could not fork iptables: $!"
+            croak "[*] Could not fork $self->{'_ipt_bin_name'}: $!"
                 unless defined $ipt_pid;
 
             ### exec the iptables command and preserve stdout and stderr
@@ -678,7 +693,8 @@ sub run_ipt_cmd() {
     }
 
     if ($debug or $verbose) {
-        print $fh localtime() . "     iptables command stdout:\n";
+        print $fh localtime() . "     $self->{'_ipt_bin_name'} " .
+            "command stdout:\n";
         for my $line (@stdout) {
             if ($line =~ /\n$/) {
                 print $fh $line;
@@ -686,7 +702,8 @@ sub run_ipt_cmd() {
                 print $fh $line, "\n";
             }
         }
-        print $fh localtime() . "     iptables command stderr:\n";
+        print $fh localtime() . "     $self->{'_ipt_bin_name'} " .
+            "command stderr:\n";
         for my $line (@stderr) {
             if ($line =~ /\n$/) {
                 print $fh $line;
@@ -718,7 +735,7 @@ IPTables::ChainMgr - Perl extension for manipulating iptables and ip6tables poli
       'iptout'   => '/tmp/iptables.out',
       'ipterr'   => '/tmp/iptables.err',
       'debug'    => 0,
-      'verbose'  => 0
+      'verbose'  => 0,
 
       ### advanced options
       'ipt_alarm' => 5,  ### max seconds to wait for iptables execution.
@@ -747,6 +764,9 @@ IPTables::ChainMgr - Perl extension for manipulating iptables and ip6tables poli
       ### INPUT chain)
       $ipt_obj->delete_chain('filter', 'INPUT', 'CUSTOM');
   }
+
+  # set the policy on the FORWARD table to DROP
+  $ipt_obj->set_chain_policy('filter', 'FORWARD', 'DROP');
 
   # create new iptables chain in the 'filter' table
   $ipt_obj->create_chain('filter', 'CUSTOM');
@@ -827,7 +847,7 @@ IPTables::ChainMgr - Perl extension for manipulating iptables and ip6tables poli
 The C<IPTables::ChainMgr> package provides an interface to manipulate iptables
 and ip6tables policies on Linux systems through the direct execution of
 iptables/ip6tables commands.  Although making a perl extension of libiptc
-provided by the iptables project is possible (and has been done by the
+provided by the Netfilter project is possible (and has been done by the
 IPTables::libiptc module available from CPAN), it is also easy enough to just
 execute iptables/ip6tables commands directly in order to both parse and change
 the configuration of the policy.  Further, this simplifies installation since
@@ -880,8 +900,18 @@ values are returned:
 
   ($rv, $out_ar, $errs_ar) = $ipt_obj->flush_chain('filter', 'CUSTOM');
 
-The flush_chain() function in the example above executes the iptables command
+The flush_chain() function in the example above executes the command
 "/sbin/iptables -t filter -F CUSTOM" or "/sbin/ip6tables -t filter -F CUSTOM".
+
+=item set_chain_policy($table, $chain, $target)
+
+This function sets the policy of a built-in chain (iptables/ip6tables does not allow
+this for non built-in chains) to the specified target:
+
+  ($rv, $out_ar, $errs_ar) = $ipt_obj->set_chain_policy('filter', 'FORWARD', 'DROP');
+
+In this example, the following command is executed behind the scenes:
+"/sbin/iptables -t filter -P FORWARD DROP" or "/sbin/ip6tables -t filter -P FORWARD DROP".
 
 =item delete_chain($table, $jump_from_chain, $chain)
 
@@ -1006,14 +1036,15 @@ lists:
   The psad mailing list: http://lists.sourceforge.net/lists/listinfo/psad-discuss
   The fwsnort mailing list: http://lists.sourceforge.net/lists/listinfo/fwsnort-discuss
 
-The latest version of the IPTables::ChainMgr extension can be found at:
+The latest version of the IPTables::ChainMgr extension can be found on CPAN and
+also here:
 
-http://www.cipherdyne.org/modules/
+  http://www.cipherdyne.org/modules/
 
 Source control is provided by git:
 
-http://www.cipherdyne.org/git/IPTables-ChainMgr.git
-http://www.cipherdyne.org/cgi-bin/gitweb.cgi?p=IPTables-ChainMgr.git;a=summary
+  http://www.cipherdyne.org/git/IPTables-ChainMgr.git
+  http://www.cipherdyne.org/cgi-bin/gitweb.cgi?p=IPTables-ChainMgr.git;a=summary
 
 =head1 CREDITS
 

@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 
 use lib (qw|../lib ../../IPTables-Parse/lib ../../IPTables-Parse.git/lib|);
+use Data::Dumper;
 use strict;
 
 eval {
@@ -135,6 +136,7 @@ sub test_cycle() {
     &add_jump_rule_test($ipt_obj, $test_table, $test_chain);
     &find_jump_rule_test($ipt_obj, $test_table, $test_chain);
     &flush_chain_test($ipt_obj, $test_table, $test_chain);
+    &set_chain_policy_test($ipt_obj, $test_table, $test_chain);
     &delete_chain_test($ipt_obj, $test_table, $test_jump_from_chain, $test_chain);
 
     return;
@@ -166,6 +168,29 @@ sub flush_chain_test() {
 
     return;
 }
+
+sub set_chain_policy_test() {
+    my ($ipt_obj, $test_table, $test_chain) = @_;
+
+    for my $target (qw/DROP ACCEPT/) {
+        &dots_print("cannot set chain policy: $test_table $test_chain $target");
+
+        my ($rv, $out_ar, $err_ar) = $ipt_obj->set_chain_policy($test_table,
+            $test_chain, $target);
+
+        if ($rv) {  ### bad, cannot set policy for a non built-in chain
+            $rv = 0;
+        } else {
+            $rv = 1;
+        }
+
+        &pass_fail($rv, "   Was able to set $test_table $test_chain chain " .
+            "policy to $target, should only be able to do this for built-in chains.");
+    }
+
+    return;
+}
+
 
 sub add_jump_rule_test() {
     my ($ipt_obj, $test_table, $test_chain) = @_;
