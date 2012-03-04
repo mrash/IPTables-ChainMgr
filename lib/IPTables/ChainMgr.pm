@@ -71,10 +71,10 @@ sub create_chain() {
     my $iptables = $self->{'_iptables'};
 
     ### see if the chain exists first
-    my ($rv, $out_aref, $err_aref) = $self->chain_exists($table, $chain);
+    my ($rv, $out_ar, $err_ar) = $self->chain_exists($table, $chain);
 
     ### the chain already exists
-    return 1, $out_aref, $err_aref if $rv;
+    return 1, $out_ar, $err_ar if $rv;
 
     ### create the chain
     return $self->run_ipt_cmd("$iptables -t $table -N $chain");
@@ -100,17 +100,17 @@ sub delete_chain() {
     my $iptables = $self->{'_iptables'};
 
     ### see if the chain exists first
-    my ($rv, $out_aref, $err_aref) = $self->chain_exists($table, $del_chain);
+    my ($rv, $out_ar, $err_ar) = $self->chain_exists($table, $del_chain);
 
     ### return true if the chain doesn't exist (it is not an error condition)
-    return 1, $out_aref, $err_aref unless $rv;
+    return 1, $out_ar, $err_ar unless $rv;
 
     ### flush the chain
-    ($rv, $out_aref, $err_aref)
+    ($rv, $out_ar, $err_ar)
         = $self->flush_chain($table, $del_chain, $iptables);
 
     ### could not flush the chain
-    return 0, $out_aref, $err_aref unless $rv;
+    return 0, $out_ar, $err_ar unless $rv;
 
     my $ip_any_net = '0.0.0.0/0';
     $ip_any_net = '::/0' if $self->{'_ipt_bin_name'} eq 'ip6tables';
@@ -154,11 +154,11 @@ sub append_ip_rule() {
         qq|$self->{'_ipt_bin_name'} target, e.g. "DROP"|;
 
     ### optionally add port numbers and protocols, etc.
-    my $extended_href = shift || {};
+    my $extended_hr = shift || {};
 
     ### -1 for append
     return $self->add_ip_rule($src, $dst, -1, $table,
-        $chain, $target, $extended_href);
+        $chain, $target, $extended_hr);
 }
 
 sub add_ip_rule() {
@@ -172,7 +172,7 @@ sub add_ip_rule() {
         croak qq|[-] Must specify an $self->{'_ipt_bin_name'} | .
             qq|target, e.g. "DROP"|;
     ### optionally add port numbers and protocols, etc.
-    my $extended_href = shift || {};
+    my $extended_hr = shift || {};
     my $iptables = $self->{'_iptables'};
 
     ### normalize src/dst if necessary; this is because iptables
@@ -183,16 +183,16 @@ sub add_ip_rule() {
     ### first check to see if this rule already exists
     my ($rule_position, $num_chain_rules)
             = $self->find_ip_rule($normalized_src, $normalized_dst, $table,
-                $chain, $target, $extended_href);
+                $chain, $target, $extended_hr);
 
     if ($rule_position) {
         my $msg = '';
-        if (keys %$extended_href) {
+        if (keys %$extended_hr) {
             $msg = "Table: $table, chain: $chain, $normalized_src -> " .
                 "$normalized_dst ";
             for my $key (qw(protocol s_port d_port mac_source state ctstate)) {
-                $msg .= "$key $extended_href->{$key} "
-                    if defined $extended_href->{$key};
+                $msg .= "$key $extended_hr->{$key} "
+                    if defined $extended_hr->{$key};
             }
             $msg .= 'rule already exists.';
         } else {
@@ -223,36 +223,36 @@ sub add_ip_rule() {
         $ipt_cmd = "$iptables -t $table -I $chain $rulenum ";
     }
 
-    if (keys %$extended_href) {
-        $ipt_cmd .= "-p $extended_href->{'protocol'} "
-            if defined $extended_href->{'protocol'};
+    if (keys %$extended_hr) {
+        $ipt_cmd .= "-p $extended_hr->{'protocol'} "
+            if defined $extended_hr->{'protocol'};
         $ipt_cmd .= "-s $normalized_src ";
-        $ipt_cmd .= "--sport $extended_href->{'s_port'} "
-            if defined $extended_href->{'s_port'};
+        $ipt_cmd .= "--sport $extended_hr->{'s_port'} "
+            if defined $extended_hr->{'s_port'};
         $ipt_cmd .= "-d $normalized_dst ";
-        $ipt_cmd .= "--dport $extended_href->{'d_port'} "
-            if defined $extended_href->{'d_port'};
-        $ipt_cmd .= "-m mac --mac-source $extended_href->{'mac_source'} "
-            if defined $extended_href->{'mac_source'};
-        $ipt_cmd .= "-m state --state $extended_href->{'state'} "
-            if defined $extended_href->{'state'};
-        $ipt_cmd .= "-m conntrack --ctstate $extended_href->{'ctstate'} "
-            if defined $extended_href->{'ctstate'};
+        $ipt_cmd .= "--dport $extended_hr->{'d_port'} "
+            if defined $extended_hr->{'d_port'};
+        $ipt_cmd .= "-m mac --mac-source $extended_hr->{'mac_source'} "
+            if defined $extended_hr->{'mac_source'};
+        $ipt_cmd .= "-m state --state $extended_hr->{'state'} "
+            if defined $extended_hr->{'state'};
+        $ipt_cmd .= "-m conntrack --ctstate $extended_hr->{'ctstate'} "
+            if defined $extended_hr->{'ctstate'};
         $ipt_cmd .= "-j $target";
 
         $msg = "Table: $table, chain: $chain, added $normalized_src " .
             "-> $normalized_dst ";
         for my $key (qw(protocol s_port d_port mac_source state ctstate)) {
-            $msg .= "$key $extended_href->{$key} "
-                if defined $extended_href->{$key};
+            $msg .= "$key $extended_hr->{$key} "
+                if defined $extended_hr->{$key};
         }
 
         ### for NAT
-        if (defined $extended_href->{'to_ip'} and
-                defined $extended_href->{'to_port'}) {
-            $ipt_cmd .= " --to $extended_href->{'to_ip'}:" .
-                "$extended_href->{'to_port'}";
-            $msg .= "$extended_href->{'to_ip'}:$extended_href->{'to_port'}";
+        if (defined $extended_hr->{'to_ip'} and
+                defined $extended_hr->{'to_port'}) {
+            $ipt_cmd .= " --to $extended_hr->{'to_ip'}:" .
+                "$extended_hr->{'to_port'}";
+            $msg .= "$extended_hr->{'to_ip'}:$extended_hr->{'to_port'}";
         }
 
         $msg =~ s/\s*$//;
@@ -261,12 +261,12 @@ sub add_ip_rule() {
         $msg = "Table: $table, chain: $chain, added $normalized_src " .
             "-> $normalized_dst";
     }
-    my ($rv, $out_aref, $err_aref) = $self->run_ipt_cmd($ipt_cmd);
+    my ($rv, $out_ar, $err_ar) = $self->run_ipt_cmd($ipt_cmd);
     if ($rv) {
-        push @$out_aref, $msg if $msg;
+        push @$out_ar, $msg if $msg;
     }
-    push @$err_aref, $idx_err if $idx_err;
-    return $rv, $out_aref, $err_aref;
+    push @$err_ar, $idx_err if $idx_err;
+    return $rv, $out_ar, $err_ar;
 }
 
 sub delete_ip_rule() {
@@ -278,7 +278,7 @@ sub delete_ip_rule() {
     my $target = shift || croak qq|[-] Must specify an | .
         qq|$self->{'_ipt_bin_name'} target, e.g. "DROP"|;
     ### optionally add port numbers and protocols, etc.
-    my $extended_href = shift || {};
+    my $extended_hr = shift || {};
     my $iptables = $self->{'_iptables'};
 
     ### normalize src/dst if necessary; this is because iptables
@@ -289,7 +289,7 @@ sub delete_ip_rule() {
     ### first check to see if this rule already exists
     my ($rulenum, $num_chain_rules)
         = $self->find_ip_rule($normalized_src,
-            $normalized_dst, $table, $chain, $target, $extended_href);
+            $normalized_dst, $table, $chain, $target, $extended_hr);
 
     if ($rulenum) {
         ### we need to delete the rule
@@ -297,16 +297,16 @@ sub delete_ip_rule() {
     }
 
     my $extended_msg = '';
-    if (keys %$extended_href) {
+    if (keys %$extended_hr) {
         for my $key (qw(protocol s_port d_port mac_source state ctstate)) {
-            $extended_msg .= "$key: $extended_href->{$key} "
-                if defined $extended_href->{$key};
+            $extended_msg .= "$key: $extended_hr->{$key} "
+                if defined $extended_hr->{$key};
         }
         ### for NAT
-        if (defined $extended_href->{'to_ip'} and
-                defined $extended_href->{'to_port'}) {
-            $extended_msg .= "$extended_href->{'to_ip'}:" .
-                "$extended_href->{'to_port'}";
+        if (defined $extended_hr->{'to_ip'} and
+                defined $extended_hr->{'to_port'}) {
+            $extended_msg .= "$extended_hr->{'to_ip'}:" .
+                "$extended_hr->{'to_port'}";
         }
     }
     $extended_msg =~ s/\s*$//;
@@ -326,7 +326,7 @@ sub find_ip_rule() {
         qq|$self->{'_ipt_bin_name'} target (this may be a chain).|;
 
     ### optionally add port numbers and protocols, etc.
-    my $extended_href = shift || {};
+    my $extended_hr = shift || {};
     my $iptables = $self->{'_iptables'};
 
     my $ipt_parse = new IPTables::Parse(
@@ -349,19 +349,19 @@ sub find_ip_rule() {
             "$IPTables::Parse::VERSION\n"
     }
 
-    my $chain_aref = $ipt_parse->chain_rules($table, $chain);
+    my $chain_ar = $ipt_parse->chain_rules($table, $chain);
 
-    $src = $self->normalize_net($src) if defined $extended_href->{'normalize'}
-        and $extended_href->{'normalize'};
-    $dst = $self->normalize_net($dst) if defined $extended_href->{'normalize'}
-        and $extended_href->{'normalize'};
+    $src = $self->normalize_net($src) if defined $extended_hr->{'normalize'}
+        and $extended_hr->{'normalize'};
+    $dst = $self->normalize_net($dst) if defined $extended_hr->{'normalize'}
+        and $extended_hr->{'normalize'};
 
     my $rulenum = 1;
-    for my $rule_href (@$chain_aref) {
-        if ($rule_href->{'target'} eq $target
-                and $rule_href->{'src'} eq $src
-                and $rule_href->{'dst'} eq $dst) {
-            if (keys %$extended_href) {
+    for my $rule_hr (@$chain_ar) {
+        if ($rule_hr->{'target'} eq $target
+                and $rule_hr->{'src'} eq $src
+                and $rule_hr->{'dst'} eq $dst) {
+            if (keys %$extended_hr) {
                 my $found = 1;
                 for my $key (qw(
                     protocol
@@ -373,27 +373,27 @@ sub find_ip_rule() {
                     state
                     ctstate
                 )) {
-                    if (defined $extended_href->{$key}) {
-                        if (defined $rule_href->{$key}) {
+                    if (defined $extended_hr->{$key}) {
+                        if (defined $rule_hr->{$key}) {
                             if ($key eq 'state' or $key eq 'ctstate') {
                                 ### make sure that state ordering as reported
                                 ### by iptables is accounted for vs. what was
                                 ### supplied to the module
-                                unless (&state_compare($extended_href->{$key},
-                                        $rule_href->{$key})) {
+                                unless (&state_compare($extended_hr->{$key},
+                                        $rule_hr->{$key})) {
                                     $found = 0;
                                     last;
                                 }
                             } elsif ($key eq 'mac_source') {
                                 ### make sure case does not matter
-                                unless (lc($extended_href->{$key})
-                                        eq lc($rule_href->{$key})) {
+                                unless (lc($extended_hr->{$key})
+                                        eq lc($rule_hr->{$key})) {
                                     $found = 0;
                                     last;
                                 }
                             } else {
-                                unless ($extended_href->{$key}
-                                        eq $rule_href->{$key}) {
+                                unless ($extended_hr->{$key}
+                                        eq $rule_hr->{$key}) {
                                     $found = 0;
                                     last;
                                 }
@@ -404,25 +404,25 @@ sub find_ip_rule() {
                         }
                     }
                 }
-                return $rulenum, $#$chain_aref+1 if $found;
+                return $rulenum, $#$chain_ar+1 if $found;
             } else {
-                if ($rule_href->{'protocol'} eq 'all') {
+                if ($rule_hr->{'protocol'} eq 'all') {
                     if ($target eq 'LOG' or $target eq 'ULOG') {
                         ### built-in LOG and ULOG target rules always
                         ### have extended information
-                        return $rulenum, $#$chain_aref+1;
-                    } elsif (not $rule_href->{'extended'}) {
+                        return $rulenum, $#$chain_ar+1;
+                    } elsif (not $rule_hr->{'extended'}) {
                         ### don't want any additional criteria (such as
                         ### port numbers) in the rule. Note that we are
                         ### also not checking interfaces
-                        return $rulenum, $#$chain_aref+1;
+                        return $rulenum, $#$chain_ar+1;
                     }
                 }
             }
         }
         $rulenum++;
     }
-    return 0, $#$chain_aref+1;
+    return 0, $#$chain_ar+1;
 }
 
 sub state_compare() {
@@ -518,10 +518,10 @@ sub add_jump_rule() {
     }
 
     ### we need to add the rule
-    my ($rv, $out_aref, $err_aref) = $self->run_ipt_cmd(
+    my ($rv, $out_ar, $err_ar) = $self->run_ipt_cmd(
         "$iptables -t $table -I $from_chain $rulenum -j $to_chain");
-    push @$err_aref, $idx_err if $idx_err;
-    return $rv, $out_aref, $err_aref;
+    push @$err_ar, $idx_err if $idx_err;
+    return $rv, $out_ar, $err_ar;
 }
 
 sub REAPER {
