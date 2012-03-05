@@ -190,7 +190,7 @@ sub add_ip_rule() {
         if (keys %$extended_hr) {
             $msg = "Table: $table, chain: $chain, $normalized_src -> " .
                 "$normalized_dst ";
-            for my $key (qw(protocol s_port d_port mac_source state ctstate)) {
+            for my $key (keys %$extended_hr) {
                 $msg .= "$key $extended_hr->{$key} "
                     if defined $extended_hr->{$key};
             }
@@ -242,7 +242,7 @@ sub add_ip_rule() {
 
         $msg = "Table: $table, chain: $chain, added $normalized_src " .
             "-> $normalized_dst ";
-        for my $key (qw(protocol s_port d_port mac_source state ctstate)) {
+        for my $key (keys %$extended_hr) {
             $msg .= "$key $extended_hr->{$key} "
                 if defined $extended_hr->{$key};
         }
@@ -298,7 +298,7 @@ sub delete_ip_rule() {
 
     my $extended_msg = '';
     if (keys %$extended_hr) {
-        for my $key (qw(protocol s_port d_port mac_source state ctstate)) {
+        for my $key (keys %$extended_hr) {
             $extended_msg .= "$key: $extended_hr->{$key} "
                 if defined $extended_hr->{$key};
         }
@@ -349,6 +349,39 @@ sub find_ip_rule() {
             "$IPTables::Parse::VERSION\n"
     }
 
+    ### default if IPTables::Parse version < 1.2
+    my @parse_keys = (qw(protocol s_port d_port to_ip
+            to_port mac_source state ctstate));
+
+    if ($IPTables::Parse::VERSION > 1.1) {
+        @parse_keys = ();
+        ### get the keys list from the IPTables::Parse module
+        for my $key (keys %{$ipt_parse->{'parse_keys'}->{'regular'}}) {
+            push @parse_keys, $key;
+        }
+        for my $key (keys %{$ipt_parse->{'parse_keys'}->{'extended'}}) {
+            push @parse_keys, $key;
+        }
+
+        ### make sure that an unsupported search criteria is not required
+        if (keys %$extended_hr) {
+            for my $key (keys %$extended_hr) {
+                next if $key eq 'normalize';
+                my $found = 0;
+                for my $supported_key (@parse_keys) {
+                    if ($key eq $supported_key) {
+                        $found = 1;
+                        last;
+                    }
+                }
+                unless ($found) {
+                    croak "[*] Extended hash search key '$key' not " .
+                        "supported by IPTables::Parse";
+                }
+            }
+        }
+    }
+
     my $chain_ar = $ipt_parse->chain_rules($table, $chain);
 
     $src = $self->normalize_net($src) if defined $extended_hr->{'normalize'}
@@ -363,16 +396,7 @@ sub find_ip_rule() {
                 and $rule_hr->{'dst'} eq $dst) {
             if (keys %$extended_hr) {
                 my $found = 1;
-                for my $key (qw(
-                    protocol
-                    s_port
-                    d_port
-                    to_ip
-                    to_port
-                    mac_source
-                    state
-                    ctstate
-                )) {
+                for my $key (@parse_keys) {
                     if (defined $extended_hr->{$key}) {
                         if (defined $rule_hr->{$key}) {
                             if ($key eq 'state' or $key eq 'ctstate') {
