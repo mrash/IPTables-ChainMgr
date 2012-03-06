@@ -3,6 +3,8 @@ Revision history for Perl extension IPTables::ChainMgr.
 1.3 Sun Mar 04 22:45:44 2012
     - For IPTables::Parse versions > 1.1, updated IPTables::ChainMgr to derive
       extended hash search keys for find_ip_rule() from IPTables::Parse.
+    - For IPTables::Parse versions > 1.1, updated IPTables::ChainMgr to derive
+      iptables 'match' keys to build iptables rules from IPTables::Parse.
     - Simplified append_ip_rule() to just be a wrapper around add_ip_rule(),
       which was updated to allow the value "-1" to be passed in as the rule
       insertion number in order to denote "append" (-A <chain>) mode.

@@ -224,38 +224,19 @@ sub add_ip_rule() {
     }
 
     if (keys %$extended_hr) {
-        $ipt_cmd .= "-p $extended_hr->{'protocol'} "
-            if defined $extended_hr->{'protocol'};
-        $ipt_cmd .= "-s $normalized_src ";
-        $ipt_cmd .= "--sport $extended_hr->{'s_port'} "
-            if defined $extended_hr->{'s_port'};
-        $ipt_cmd .= "-d $normalized_dst ";
-        $ipt_cmd .= "--dport $extended_hr->{'d_port'} "
-            if defined $extended_hr->{'d_port'};
-        $ipt_cmd .= "-m mac --mac-source $extended_hr->{'mac_source'} "
-            if defined $extended_hr->{'mac_source'};
-        $ipt_cmd .= "-m state --state $extended_hr->{'state'} "
-            if defined $extended_hr->{'state'};
-        $ipt_cmd .= "-m conntrack --ctstate $extended_hr->{'ctstate'} "
-            if defined $extended_hr->{'ctstate'};
-        $ipt_cmd .= "-j $target";
+
+        my ($ipt_tmp_str, $msg_tmp_str) = $self->build_ipt_matches(
+            $extended_hr, $normalized_src, $normalized_dst);
 
         $msg = "Table: $table, chain: $chain, added $normalized_src " .
             "-> $normalized_dst ";
-        for my $key (keys %$extended_hr) {
-            $msg .= "$key $extended_hr->{$key} "
-                if defined $extended_hr->{$key};
-        }
 
-        ### for NAT
-        if (defined $extended_hr->{'to_ip'} and
-                defined $extended_hr->{'to_port'}) {
-            $ipt_cmd .= " --to $extended_hr->{'to_ip'}:" .
-                "$extended_hr->{'to_port'}";
-            $msg .= "$extended_hr->{'to_ip'}:$extended_hr->{'to_port'}";
-        }
+        ### always add the target at the end
+        $ipt_cmd .= "$ipt_tmp_str -j $target";
 
+        $msg .= $msg_tmp_str;
         $msg =~ s/\s*$//;
+
     } else {
         $ipt_cmd .= "-s $normalized_src -d $normalized_dst -j $target";
         $msg = "Table: $table, chain: $chain, added $normalized_src " .
@@ -267,6 +248,110 @@ sub add_ip_rule() {
     }
     push @$err_ar, $idx_err if $idx_err;
     return $rv, $out_ar, $err_ar;
+}
+
+sub build_ipt_matches() {
+    my $self = shift;
+    my $extended_hr = shift;
+    my $normalized_src = shift || '';
+    my $normalized_dst = shift || '';
+
+    my $ipt_matches = '';
+    my $msg = '';
+
+    if ($IPTables::Parse::VERSION > 1.1) {
+
+        ### get the information about how to build the match part of the
+        ### iptables command from the IPTables::Parse module
+        my $ipt_parse = new IPTables::Parse(
+            'iptables'  => $self->{'_iptables'},
+            'iptout'    => $self->{'_iptout'},
+            'ipterr'    => $self->{'_ipterr'},
+            'debug'     => $self->{'_debug'},
+            'verbose'   => $self->{'_verbose'},
+            'ipt_alarm' => $self->{'_ipt_alarm'},
+            'ipt_exec_style' => $self->{'_ipt_exec_style'},
+            'ipt_exec_sleep' => $self->{'_ipt_exec_sleep'},
+            'sigchld_handler' => $self->{'_sigchld_handler'},
+        ) or croak "[*] Could not acquire IPTables::Parse object";
+
+        ### src and dst
+        if ($normalized_src ne '') {
+            $ipt_matches .= "$ipt_parse->{'parse_keys'}->{'regular'}->{'src'}->{'ipt_match'} " .
+                "$normalized_src ";
+        }
+
+        if ($normalized_src ne '') {
+            $ipt_matches .= "$ipt_parse->{'parse_keys'}->{'regular'}->{'dst'}->{'ipt_match'} " .
+                "$normalized_dst ";
+        }
+
+        ### handle 'regular' keys first
+        for my $key (keys %$extended_hr) {
+            if (defined $ipt_parse->{'parse_keys'}->{'regular'}->{$key}) {
+                $ipt_matches .= "$ipt_parse->{'parse_keys'}->{'regular'}->{$key}->{'ipt_match'} " .
+                    "$extended_hr->{$key} ";
+            }
+        }
+
+        ### special case for port values (handle them now)
+        for my $key (qw/sport s_dport dport d_port/) {
+            next unless defined $extended_hr->{$key};
+            if ($extended_hr->{$key}) {
+                $ipt_matches .= "$ipt_parse->{'parse_keys'}->{'extended'}->{$key}->{'ipt_match'} " .
+                    qq|$extended_hr->{$key} |;
+            }
+        }
+
+        ### now handle 'match' keys
+        for my $key (keys %$extended_hr) {
+            my $parse_hr = $ipt_parse->{'parse_keys'}->{'extended'};
+            if (defined $parse_hr->{$key}) {
+                next if $key =~ /s_?port$/ or $key =~ /d_?port$/;
+                if (defined $parse_hr->{$key}->{'use_quotes'}
+                        and $parse_hr->{$key}->{'use_quotes'}) {
+                    $ipt_matches .= "$parse_hr->{$key}->{'ipt_match'} " .
+                        qq|"$extended_hr->{$key}" |;
+                } else {
+                    $ipt_matches .= "$parse_hr->{$key}->{'ipt_match'} " .
+                        "$extended_hr->{$key} ";
+                }
+            }
+        }
+
+    } else {
+        $ipt_matches .= "-p $extended_hr->{'protocol'} "
+            if defined $extended_hr->{'protocol'};
+        $ipt_matches .= "-s $normalized_src ";
+        $ipt_matches .= "--sport $extended_hr->{'s_port'} "
+            if defined $extended_hr->{'s_port'};
+        $ipt_matches .= "-d $normalized_dst ";
+        $ipt_matches .= "--dport $extended_hr->{'d_port'} "
+            if defined $extended_hr->{'d_port'};
+        $ipt_matches .= "-m mac --mac-source $extended_hr->{'mac_source'} "
+            if defined $extended_hr->{'mac_source'};
+        $ipt_matches .= "-m state --state $extended_hr->{'state'} "
+            if defined $extended_hr->{'state'};
+        $ipt_matches .= "-m conntrack --ctstate $extended_hr->{'ctstate'} "
+            if defined $extended_hr->{'ctstate'};
+
+        for my $key (keys %$extended_hr) {
+            $msg .= "$key $extended_hr->{$key} "
+                if defined $extended_hr->{$key};
+        }
+
+        ### for NAT
+        if (defined $extended_hr->{'to_ip'} and
+                defined $extended_hr->{'to_port'}) {
+            $ipt_matches .= " --to $extended_hr->{'to_ip'}:" .
+                "$extended_hr->{'to_port'}";
+            $msg .= "$extended_hr->{'to_ip'}:$extended_hr->{'to_port'}";
+        }
+    }
+
+    $ipt_matches =~ s/\s*$//;
+
+    return ($ipt_matches, $msg);
 }
 
 sub delete_ip_rule() {
@@ -355,6 +440,7 @@ sub find_ip_rule() {
 
     if ($IPTables::Parse::VERSION > 1.1) {
         @parse_keys = ();
+
         ### get the keys list from the IPTables::Parse module
         for my $key (keys %{$ipt_parse->{'parse_keys'}->{'regular'}}) {
             push @parse_keys, $key;
