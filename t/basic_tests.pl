@@ -125,7 +125,6 @@ sub test_cycle() {
     &chain_does_not_exist_test($ipt_obj, $test_table, $test_chain);
     &create_chain_test($ipt_obj, $test_table, $test_chain);
     &add_rules_tests($ipt_obj, $test_table, $test_chain);
-    &find_rules_tests($ipt_obj, $test_table, $test_chain);
     &flush_chain_test($ipt_obj, $test_table, $test_chain);
     &delete_chain_test($ipt_obj, $test_table, $test_jump_from_chain, $test_chain);
 
@@ -133,11 +132,8 @@ sub test_cycle() {
     &chain_does_not_exist_test($ipt_obj, $test_table, $test_chain);
     &create_chain_test($ipt_obj, $test_table, $test_chain);
     &add_rules_tests($ipt_obj, $test_table, $test_chain);
-    &find_rules_tests($ipt_obj, $test_table, $test_chain);
     &add_extended_rules_tests($ipt_obj, $test_table, $test_chain);
-    &find_extended_rules_tests($ipt_obj, $test_table, $test_chain);
     &add_jump_rule_test($ipt_obj, $test_table, $test_chain);
-    &find_jump_rule_test($ipt_obj, $test_table, $test_chain);
     &flush_chain_test($ipt_obj, $test_table, $test_chain);
     &set_chain_policy_test($ipt_obj, $test_table, $test_chain);
     &delete_chain_test($ipt_obj, $test_table, $test_jump_from_chain, $test_chain);
@@ -204,12 +200,6 @@ sub add_jump_rule_test() {
 
     &pass_fail($rv, "   Could not add jump rule.");
 
-    return;
-}
-
-sub find_jump_rule_test() {
-    my ($ipt_obj, $test_table, $test_chain) = @_;
-
     my $ip_any_net = '0.0.0.0/0';
     $ip_any_net = '::/0' if $ipt_obj->{'_ipt_bin_name'} eq 'ip6tables';
 
@@ -222,7 +212,6 @@ sub find_jump_rule_test() {
 
     return;
 }
-
 
 sub add_rules_tests() {
     my ($ipt_obj, $test_table, $test_chain) = @_;
@@ -241,6 +230,12 @@ sub add_rules_tests() {
                 $dst_ip, $chain_past_end, $test_table, $test_chain, $target, {});
 
         &pass_fail($rv, "   Could not add $src_ip -> $dst_ip $target rule.");
+
+        &dots_print("find rule: $test_table $test_chain $src_ip -> $dst_ip $target ");
+        my ($rule_position, $num_chain_rules) = $ipt_obj->find_ip_rule($src_ip,
+                $dst_ip, $test_table, $test_chain, $target, {'normalize' => 1});
+
+        &pass_fail($rule_position, "   Could not find $src_ip -> $dst_ip $target rule.");
     }
 
     for my $target (qw/LOG ACCEPT RETURN/) {
@@ -249,23 +244,7 @@ sub add_rules_tests() {
                 $dst_ip, -1, $test_table, $test_chain, $target, {});
 
         &pass_fail($rv, "   Could not append $src_ip -> $dst_ip $target rule.");
-    }
 
-    return;
-}
-
-sub find_rules_tests() {
-    my ($ipt_obj, $test_table, $test_chain) = @_;
-
-    my $src_ip = $ipt_obj->normalize_net($ipv4_src);
-    my $dst_ip = $ipt_obj->normalize_net($ipv4_dst);
-
-    if ($ipt_obj->{'_ipt_bin_name'} eq 'ip6tables') {
-        $src_ip = $ipt_obj->normalize_net($ipv6_src);
-        $dst_ip = $ipt_obj->normalize_net($ipv6_dst);
-    }
-
-    for my $target (qw/LOG ACCEPT RETURN/) {
         &dots_print("find rule: $test_table $test_chain $src_ip -> $dst_ip $target ");
         my ($rule_position, $num_chain_rules) = $ipt_obj->find_ip_rule($src_ip,
                 $dst_ip, $test_table, $test_chain, $target, {'normalize' => 1});
@@ -296,63 +275,18 @@ sub add_extended_rules_tests() {
                 {'protocol' => 'tcp', 's_port' => 0, 'd_port' => 80});
         &pass_fail($rv, "   Could not add TCP $src_ip(0) -> $dst_ip(80) $target rule");
 
+        &dots_print("find ext rule: $test_table $test_chain TCP $src_ip(0) -> $dst_ip(80) $target ");
+        my ($rule_position, $num_chain_rules) = $ipt_obj->find_ip_rule($src_ip,
+                $dst_ip, $test_table, $test_chain, $target,
+                {'normalize' => 1, 'protocol' => 'tcp', 's_port' => 0, 'd_port' => 80});
+        &pass_fail($rule_position, "   Could not find TCP $src_ip(0) -> $dst_ip(80) $target rule");
+
         ### TCP + state tracking
         &dots_print("add_ext_ip_rules(): $test_table $test_chain TCP $src_ip(0) -> $dst_ip(80) state ESTABLISHED,RELATED $target ");
         ($rv, $out_ar, $err_ar) = $ipt_obj->add_ip_rule($src_ip,
                 $dst_ip, $chain_past_end, $test_table, $test_chain, $target,
                 {'protocol' => 'tcp', 's_port' => 0, 'd_port' => 80, 'state' => 'ESTABLISHED,RELATED'});
         &pass_fail($rv, "   Could not add TCP $src_ip(0) -> $dst_ip(80) state ESTABLISHED,RELATED $target rule");
-
-        ### TCP + ctstate tracking
-        &dots_print("add_ext_ip_rules(): $test_table $test_chain TCP $src_ip(0) -> $dst_ip(80) ctstate ESTABLISHED,RELATED $target ");
-        ($rv, $out_ar, $err_ar) = $ipt_obj->add_ip_rule($src_ip,
-                $dst_ip, $chain_past_end, $test_table, $test_chain, $target,
-                {'protocol' => 'tcp', 's_port' => 0, 'd_port' => 80, 'ctstate' => 'ESTABLISHED,RELATED'});
-        &pass_fail($rv, "   Could not add TCP $src_ip(0) -> $dst_ip(80) ctstate ESTABLISHED,RELATED $target rule");
-
-        ### TCP + mac source
-        &dots_print("add_ext_ip_rules(): $test_table $test_chain TCP $src_ip(0) -> $dst_ip(80) $target mac_source $mac_source ");
-        ($rv, $out_ar, $err_ar) = $ipt_obj->add_ip_rule($src_ip,
-                $dst_ip, $chain_past_end, $test_table, $test_chain, $target,
-                {'protocol' => 'tcp', 's_port' => 0, 'd_port' => 80, 'mac_source' => $mac_source});
-        &pass_fail($rv, "   Could not add TCP $src_ip(0) -> $dst_ip(80) $target mac_source $mac_source");
-
-        ### TCP + comment
-        &dots_print("add_ext_ip_rules(): $test_table $test_chain TCP $src_ip(0) -> $dst_ip(80) $target comment 'test comment' ");
-        ($rv, $out_ar, $err_ar) = $ipt_obj->add_ip_rule($src_ip,
-                $dst_ip, $chain_past_end, $test_table, $test_chain, $target,
-                {'protocol' => 'tcp', 's_port' => 0, 'd_port' => 80, 'comment' => 'test comment'});
-        &pass_fail($rv, "   Could not add TCP $src_ip(0) -> $dst_ip(80) $target comment 'test comment'");
-
-        ### UDP
-        &dots_print("add_ext_ip_rules(): $test_table $test_chain UDP $src_ip(0) -> $dst_ip(53) $target ");
-        ($rv, $out_ar, $err_ar) = $ipt_obj->add_ip_rule($src_ip,
-                $dst_ip, $chain_past_end, $test_table, $test_chain, $target,
-                {'protocol' => 'udp', 's_port' => 0, 'd_port' => 53});
-        &pass_fail($rv, "   Could not add UDP $src_ip(0) -> $dst_ip(53) $target rule");
-
-    }
-
-    return;
-}
-
-sub find_extended_rules_tests() {
-    my ($ipt_obj, $test_table, $test_chain) = @_;
-
-    my $src_ip = $ipt_obj->normalize_net($ipv4_src);
-    my $dst_ip = $ipt_obj->normalize_net($ipv4_dst);
-
-    if ($ipt_obj->{'_ipt_bin_name'} eq 'ip6tables') {
-        $src_ip = $ipt_obj->normalize_net($ipv6_src);
-        $dst_ip = $ipt_obj->normalize_net($ipv6_dst);
-    }
-
-    for my $target (qw/LOG ACCEPT RETURN/) {
-        &dots_print("find ext rule: $test_table $test_chain TCP $src_ip(0) -> $dst_ip(80) $target ");
-        my ($rule_position, $num_chain_rules) = $ipt_obj->find_ip_rule($src_ip,
-                $dst_ip, $test_table, $test_chain, $target,
-                {'normalize' => 1, 'protocol' => 'tcp', 's_port' => 0, 'd_port' => 80});
-        &pass_fail($rule_position, "   Could not find TCP $src_ip(0) -> $dst_ip(80) $target rule");
 
         &dots_print("find ext rule: $test_table $test_chain TCP $src_ip(0) -> $dst_ip(80) state ESTABLISHED,RELATED $target ");
         ($rule_position, $num_chain_rules) = $ipt_obj->find_ip_rule($src_ip,
@@ -361,12 +295,26 @@ sub find_extended_rules_tests() {
                 'd_port' => 80, 'state' => 'ESTABLISHED,RELATED'});
         &pass_fail($rule_position, "   Could not find TCP $src_ip(0) -> $dst_ip(80) state ESTABLISHED,RELATED $target rule");
 
+        ### TCP + ctstate tracking
+        &dots_print("add_ext_ip_rules(): $test_table $test_chain TCP $src_ip(0) -> $dst_ip(80) ctstate ESTABLISHED,RELATED $target ");
+        ($rv, $out_ar, $err_ar) = $ipt_obj->add_ip_rule($src_ip,
+                $dst_ip, $chain_past_end, $test_table, $test_chain, $target,
+                {'protocol' => 'tcp', 's_port' => 0, 'd_port' => 80, 'ctstate' => 'ESTABLISHED,RELATED'});
+        &pass_fail($rv, "   Could not add TCP $src_ip(0) -> $dst_ip(80) ctstate ESTABLISHED,RELATED $target rule");
+
         &dots_print("find ext rule: $test_table $test_chain TCP $src_ip(0) -> $dst_ip(80) ctstate ESTABLISHED,RELATED $target ");
         ($rule_position, $num_chain_rules) = $ipt_obj->find_ip_rule($src_ip,
                 $dst_ip, $test_table, $test_chain, $target,
                 {'normalize' => 1, 'protocol' => 'tcp', 's_port' => 0,
                 'd_port' => 80, 'ctstate' => 'ESTABLISHED,RELATED'});
         &pass_fail($rule_position, "   Could not find TCP $src_ip(0) -> $dst_ip(80) ctstate ESTABLISHED,RELATED $target rule");
+
+        ### TCP + mac source
+        &dots_print("add_ext_ip_rules(): $test_table $test_chain TCP $src_ip(0) -> $dst_ip(80) $target mac_source $mac_source ");
+        ($rv, $out_ar, $err_ar) = $ipt_obj->add_ip_rule($src_ip,
+                $dst_ip, $chain_past_end, $test_table, $test_chain, $target,
+                {'protocol' => 'tcp', 's_port' => 0, 'd_port' => 80, 'mac_source' => $mac_source});
+        &pass_fail($rv, "   Could not add TCP $src_ip(0) -> $dst_ip(80) $target mac_source $mac_source");
 
         &dots_print("find ext rule: $test_table $test_chain TCP $src_ip(0) -> $dst_ip(80) $target mac_source $mac_source ");
         ($rule_position, $num_chain_rules) = $ipt_obj->find_ip_rule($src_ip,
@@ -376,11 +324,39 @@ sub find_extended_rules_tests() {
         &pass_fail($rule_position, "   Could not find TCP $src_ip(0) -> $dst_ip(80) $target mac_source $mac_source");
 
         ### TCP + comment
+        &dots_print("add_ext_ip_rules(): $test_table $test_chain TCP $src_ip(0) -> $dst_ip(80) $target comment 'test comment' ");
+        ($rv, $out_ar, $err_ar) = $ipt_obj->add_ip_rule($src_ip,
+                $dst_ip, $chain_past_end, $test_table, $test_chain, $target,
+                {'protocol' => 'tcp', 's_port' => 0, 'd_port' => 80, 'comment' => 'test comment'});
+        &pass_fail($rv, "   Could not add TCP $src_ip(0) -> $dst_ip(80) $target comment 'test comment'");
+
         &dots_print("find ext rule: $test_table $test_chain TCP $src_ip(0) -> $dst_ip(80) $target comment 'test comment' ");
         ($rule_position, $num_chain_rules) = $ipt_obj->find_ip_rule($src_ip,
                 $dst_ip, $test_table, $test_chain, $target,
                 {'protocol' => 'tcp', 's_port' => 0, 'd_port' => 80, 'comment' => 'test comment'});
         &pass_fail($rule_position, "   Could not find TCP $src_ip(0) -> $dst_ip(80) $target comment 'test comment'");
+
+        ### TCP + comment + string match
+        &dots_print("add_ext_ip_rules(): $test_table $test_chain TCP $src_ip(0) -> $dst_ip(80) $target comment 'test comment' string 'search str'");
+        ($rv, $out_ar, $err_ar) = $ipt_obj->add_ip_rule($src_ip,
+                $dst_ip, $chain_past_end, $test_table, $test_chain, $target,
+                {'protocol' => 'tcp', 's_port' => 0, 'd_port' => 80, 'comment' => 'test comment',
+                'string' => 'search str'});
+        &pass_fail($rv, "   Could not add TCP $src_ip(0) -> $dst_ip(80) $target comment 'test comment' string 'search str'");
+
+        &dots_print("find ext rule: $test_table $test_chain TCP $src_ip(0) -> $dst_ip(80) $target comment 'test comment' string 'search str' ");
+        ($rule_position, $num_chain_rules) = $ipt_obj->find_ip_rule($src_ip,
+                $dst_ip, $test_table, $test_chain, $target,
+                {'protocol' => 'tcp', 's_port' => 0, 'd_port' => 80, 'comment' => 'test comment',
+                'string' => 'search str'});
+        &pass_fail($rule_position, "   Could not find TCP $src_ip(0) -> $dst_ip(80) $target comment 'test comment' 'string' => 'search str'");
+
+        ### UDP
+        &dots_print("add_ext_ip_rules(): $test_table $test_chain UDP $src_ip(0) -> $dst_ip(53) $target ");
+        ($rv, $out_ar, $err_ar) = $ipt_obj->add_ip_rule($src_ip,
+                $dst_ip, $chain_past_end, $test_table, $test_chain, $target,
+                {'protocol' => 'udp', 's_port' => 0, 'd_port' => 53});
+        &pass_fail($rv, "   Could not add UDP $src_ip(0) -> $dst_ip(53) $target rule");
 
         &dots_print("find ext rule: $test_table $test_chain UDP $src_ip(0) -> $dst_ip(53) $target ");
         ($rule_position, $num_chain_rules) = $ipt_obj->find_ip_rule($src_ip,
@@ -391,7 +367,6 @@ sub find_extended_rules_tests() {
 
     return;
 }
-
 
 sub create_chain_test() {
     my ($ipt_obj, $test_table, $test_chain) = @_;
