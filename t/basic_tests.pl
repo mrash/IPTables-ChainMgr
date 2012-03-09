@@ -32,13 +32,6 @@ my $PRINT_LEN = 68;
 my $chain_past_end = 1000;
 #================== end config ===================
 
-my %targets = (
-    'ACCEPT' => '',
-    'DROP'   => '',
-    'QUEUE'  => '',
-    'RETURN' => '',
-);
-
 my %iptables_chains = (
     'mangle' => [qw/PREROUTING INPUT OUTPUT FORWARD POSTROUTING/],
     'raw'    => [qw/PREROUTING OUTPUT/],
@@ -363,6 +356,20 @@ sub add_extended_rules_tests() {
                 $dst_ip, $test_table, $test_chain, $target,
                 {'normalize' => 1, 'protocol' => 'udp', 's_port' => 0, 'd_port' => 53});
         &pass_fail($rule_position, "   Could not find UDP $src_ip(0) -> $dst_ip(53) $target rule");
+
+        ### UDP length
+        &dots_print("add_ext_ip_rules(): $test_table $test_chain UDP $src_ip(0) -> $dst_ip(53) $target length 10:100 ");
+        ($rv, $out_ar, $err_ar) = $ipt_obj->add_ip_rule($src_ip,
+                $dst_ip, $chain_past_end, $test_table, $test_chain, $target,
+                {'protocol' => 'udp', 's_port' => 0, 'd_port' => 53, 'length' => '10:100'});
+        &pass_fail($rv, "   Could not add UDP $src_ip(0) -> $dst_ip(53) $target length 10:100 rule");
+
+        &dots_print("find ext rule: $test_table $test_chain UDP $src_ip(0) -> $dst_ip(53) $target ");
+        ($rule_position, $num_chain_rules) = $ipt_obj->find_ip_rule($src_ip,
+                $dst_ip, $test_table, $test_chain, $target,
+                {'normalize' => 1, 'protocol' => 'udp', 's_port' => 0, 'd_port' => 53, 'length' => '10:100'});
+        &pass_fail($rule_position, "   Could not find UDP $src_ip(0) -> $dst_ip(53) $target  length 10:100 rule");
+
     }
 
     return;
@@ -431,7 +438,11 @@ sub dots_print() {
     for (my $i=length($msg); $i < $PRINT_LEN; $i++) {
         $dots .= '.';
     }
-    &logr($dots);
+    if ($dots) {
+        &logr($dots);
+    } else {
+        &logr(' ') unless $msg =~ /\s$/;
+    }
     return;
 }
 

@@ -439,6 +439,7 @@ sub find_ip_rule() {
             to_port mac_source state ctstate));
 
     if ($IPTables::Parse::VERSION > 1.1) {
+
         @parse_keys = ();
 
         ### get the keys list from the IPTables::Parse module
@@ -533,6 +534,57 @@ sub find_ip_rule() {
         $rulenum++;
     }
     return 0, $#$chain_ar+1;
+}
+
+sub print_parse_capabilities() {
+    my $self = shift;
+
+    my $ipt_parse = new IPTables::Parse(
+        'iptables'  => $self->{'_iptables'},
+        'iptout'    => $self->{'_iptout'},
+        'ipterr'    => $self->{'_ipterr'},
+        'debug'     => $self->{'_debug'},
+        'verbose'   => $self->{'_verbose'},
+        'ipt_alarm' => $self->{'_ipt_alarm'},
+        'ipt_exec_style' => $self->{'_ipt_exec_style'},
+        'ipt_exec_sleep' => $self->{'_ipt_exec_sleep'},
+        'sigchld_handler' => $self->{'_sigchld_handler'},
+    ) or croak "[*] Could not acquire IPTables::Parse object";
+
+    if ($IPTables::Parse::VERSION > 1.1) {
+
+        print "[+] IPTables::Parse regular options:\n";
+        for my $key (keys %{$ipt_parse->{'parse_keys'}->{'regular'}}) {
+            my $p_hr = $ipt_parse->{'parse_keys'}->{'regular'}->{$key};
+            print "    $key\n";
+            if (defined $p_hr->{'regex'} and $p_hr->{'regex'}) {
+                print "      regex: $p_hr->{'regex'}", "\n";
+            }
+            if (defined $p_hr->{'ipt_match'} and $p_hr->{'ipt_match'}) {
+                print "      ipt_match: $p_hr->{'ipt_match'} <val>", "\n";
+            }
+        }
+
+        print "\n[+] IPTables::Parse extended options:\n";
+        for my $key (keys %{$ipt_parse->{'parse_keys'}->{'extended'}}) {
+            my $p_hr = $ipt_parse->{'parse_keys'}->{'extended'}->{$key};
+            print "    $key\n";
+            if (defined $p_hr->{'regex'} and $p_hr->{'regex'}) {
+                print "      regex: $p_hr->{'regex'}", "\n";
+            }
+            if (defined $p_hr->{'ipt_match'} and $p_hr->{'ipt_match'}) {
+                print "      ipt_match: $p_hr->{'ipt_match'} <val>", "\n";
+            }
+        }
+
+    } else {
+        print "[+] IPTables::Parse capabilities:\n";
+        for my $key (qw(protocol s_port d_port to_ip
+                to_port mac_source state ctstate)) {
+            print "    $key\n";
+        }
+    }
+    return;
 }
 
 sub state_compare() {

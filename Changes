@@ -9,6 +9,9 @@ Revision history for Perl extension IPTables::ChainMgr.
       which was updated to allow the value "-1" to be passed in as the rule
       insertion number in order to denote "append" (-A <chain>) mode.
     - Added "mac_source" tests to t/basic_tests.pl.
+    - Added tests for iptables 'length' match.
+    - Added print_parse_capabilities() so that IPTables::Parse keys/regex's can
+      easily be seen.
     - Bug fix to ensure that state tracking arguments are properly processed
       by add_ip_rule().
 
