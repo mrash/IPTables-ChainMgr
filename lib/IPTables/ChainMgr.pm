@@ -263,7 +263,7 @@ sub build_ipt_matches() {
 
         ### get the information about how to build the match part of the
         ### iptables command from the IPTables::Parse module
-        my $ipt_parse = new IPTables::Parse(
+        my $ipt_parse = IPTables::Parse->new(
             'iptables'  => $self->{'_iptables'},
             'iptout'    => $self->{'_iptout'},
             'ipterr'    => $self->{'_ipterr'},
@@ -414,7 +414,7 @@ sub find_ip_rule() {
     my $extended_hr = shift || {};
     my $iptables = $self->{'_iptables'};
 
-    my $ipt_parse = new IPTables::Parse(
+    my $ipt_parse = IPTables::Parse->new(
         'iptables'  => $self->{'_iptables'},
         'iptout'    => $self->{'_iptout'},
         'ipterr'    => $self->{'_ipterr'},
@@ -539,7 +539,7 @@ sub find_ip_rule() {
 sub print_parse_capabilities() {
     my $self = shift;
 
-    my $ipt_parse = new IPTables::Parse(
+    my $ipt_parse = IPTables::Parse->new(
         'iptables'  => $self->{'_iptables'},
         'iptout'    => $self->{'_iptout'},
         'ipterr'    => $self->{'_ipterr'},
@@ -629,11 +629,11 @@ sub normalize_net() {
 
     if ($net =~ m|/| and $net =~ $ipv4_re or $net =~ m|:|) {
         if ($net =~ m|:|) {  ### an IPv6 address
-            my $n = new6 NetAddr::IP $net
+            my $n = NetAddr::IP->new6($net)
                 or croak "[*] Could not acquire NetAddr::IP object for $net";
             $normalized_net = lc($n->network()->short()) . '/' . $n->masklen();
         } else {
-            my $n = new NetAddr::IP $net
+            my $n = NetAddr::IP->new($net)
                 or croak "[*] Could not acquire NetAddr::IP object for $net";
             $normalized_net = $n->network()->cidr();
         }
@@ -847,7 +847,7 @@ IPTables::ChainMgr - Perl extension for manipulating iptables and ip6tables poli
                              ### iptables commands (default is 0).
   );
 
-  my $ipt_obj = new IPTables::ChainMgr(%opts)
+  my $ipt_obj = IPTables::ChainMgr->new(%opts)
       or die "[*] Could not acquire IPTables::ChainMgr object";
 
   my $rv = 0;
