@@ -8,7 +8,7 @@ eval {
     require IPTables::ChainMgr;
 };
 die "[*] Adjust 'use lib' statement to include ",
-    "directory where IPTables::Parse lives" if $@;
+    "directory where IPTables::Parse lives: $@" if $@;
 
 #==================== config =====================
 my $iptables_bin  = '/sbin/iptables';
