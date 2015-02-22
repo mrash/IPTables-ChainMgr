@@ -2,17 +2,19 @@
 
 use lib (qw|../lib ../../IPTables-Parse/lib ../../IPTables-Parse.git/lib|);
 use Data::Dumper;
+use Getopt::Long 'GetOptions';
 use strict;
 
 eval {
     require IPTables::ChainMgr;
 };
 die "[*] Adjust 'use lib' statement to include ",
-    "directory where IPTables::Parse lives: $@" if $@;
+    "directory where modules live: $@" if $@;
 
 #==================== config =====================
 my $iptables_bin  = '/sbin/iptables';
 my $ip6tables_bin = '/sbin/ip6tables';
+my $fw_cmd_bin    = '/bin/firewall-cmd';
 
 my $test_table = 'filter';
 my $test_chain = 'CHAINMGR';
@@ -31,6 +33,34 @@ my $logfile   = 'test.log';
 my $PRINT_LEN = 68;
 my $chain_past_end = 1000;
 #================== end config ===================
+#
+
+my $verbose = 0;
+my $debug   = 0;
+my $help    = 0;
+
+die "[*] See '$0 -h' for usage information" unless (GetOptions(
+    'verbose' => \$verbose,
+    'debug'   => \$debug,
+    'help'    => \$help,
+));
+&usage() if $help;
+
+my %ipt_opts = (
+    'iptables' => $iptables_bin,
+    'iptout'   => '/tmp/iptables.out',
+    'ipterr'   => '/tmp/iptables.err',
+    'debug'    => $debug,
+    'verbose'  => $verbose
+);
+
+my %ipt6_opts = (
+    'iptables' => $ip6tables_bin,
+    'iptout'   => '/tmp/iptables.out',
+    'ipterr'   => '/tmp/iptables.err',
+    'debug'    => $debug,
+    'verbose'  => $verbose
+);
 
 my %iptables_chains = (
     'mangle' => [qw/PREROUTING INPUT OUTPUT FORWARD POSTROUTING/],
@@ -61,15 +91,8 @@ exit 0;
 sub iptables_tests() {
 
     &logr("\n[+] Running $iptables_bin tests...\n");
-    my %opts = (
-        'iptables' => $iptables_bin,
-        'iptout'   => '/tmp/iptables.out',
-        'ipterr'   => '/tmp/iptables.err',
-        'debug'    => 0,
-        'verbose'  => 0
-    );
 
-    my $ipt_obj = new IPTables::ChainMgr(%opts)
+    my $ipt_obj = IPTables::ChainMgr->new(%ipt_opts)
         or die "[*] Could not acquire IPTables::ChainMgr object";
 
     ### built-in chains
@@ -83,15 +106,8 @@ sub iptables_tests() {
 sub ip6tables_tests() {
 
     &logr("\n[+] Running $ip6tables_bin tests...\n");
-    my %opts = (
-        'ip6tables' => $ip6tables_bin,
-        'iptout'   => '/tmp/ip6tables.out',
-        'ipterr'   => '/tmp/ip6tables.err',
-        'debug'    => 0,
-        'verbose'  => 0
-    );
 
-    my $ipt_obj = new IPTables::ChainMgr(%opts)
+    my $ipt_obj = IPTables::ChainMgr->new(%ipt6_opts)
         or die "[*] Could not acquire IPTables::ChainMgr object";
 
     ### built-in chains
@@ -481,10 +497,22 @@ sub init() {
             "UID 0 account) to effectively test fwknop";
 
     unlink $logfile if -e $logfile;
-    for my $bin ($iptables_bin, $ip6tables_bin) {
-        die "[*] $bin does not exist" unless -e $bin;
-        die "[*] $bin not executable" unless -x $bin;
+
+    if (-e $fw_cmd_bin and -x $fw_cmd_bin) {
+        $ipt_opts{'firewall-cmd'}  = $fw_cmd_bin;
+        $ipt6_opts{'firewall-cmd'} = $fw_cmd_bin;
+        $ipt6_opts{'use_ipv6'}     = 1;
+    } else {
+        for my $bin ($iptables_bin, $ip6tables_bin) {
+            die "[*] $bin does not exist" unless -e $bin;
+            die "[*] $bin not executable" unless -x $bin;
+        }
     }
 
     return;
+}
+
+sub usage() {
+    print "$0 [--debug] [--verbose] [-h]\n";
+    exit 0;
 }

@@ -10,7 +10,7 @@
 #
 # Author: Michael Rash (mbr@cipherdyne.org)
 #
-# Version: 1.2
+# Version: 1.3
 #
 ##############################################################################
 #
@@ -26,30 +26,74 @@ use strict;
 use warnings;
 use vars qw($VERSION);
 
-$VERSION = '1.2';
+$VERSION = '1.3';
 
 sub new() {
     my $class = shift;
     my %args  = @_;
 
     my $self = {
-        _iptables  => $args{'iptables'}  || $args{'ip6tables'} || '/sbin/iptables',
-        _iptout    => $args{'iptout'}    || '/tmp/ipt.out',
-        _ipterr    => $args{'ipterr'}    || '/tmp/ipt.err',
-        _ipt_alarm => $args{'ipt_alarm'} || 30,
-        _debug     => $args{'debug'}     || 0,
-        _verbose   => $args{'verbose'}   || 0,
-        _ipt_exec_style => $args{'ipt_exec_style'} || 'waitpid',
-        _ipt_exec_sleep => $args{'ipt_exec_sleep'} || 0,
+        _iptables        => $args{'iptables'}  || $args{'ip6tables'} || '/sbin/iptables',
+        _firewall_cmd    => $args{'firewall-cmd'} || '',
+        _fwd_args        => $args{'fwd_args'}     || '--direct --passthrough ipv4',
+        _ipv6            => $args{'use_ipv6'}     || 0,
+        _iptout          => $args{'iptout'}    || '/tmp/ipt.out',
+        _ipterr          => $args{'ipterr'}    || '/tmp/ipt.err',
+        _ipt_alarm       => $args{'ipt_alarm'} || 30,
+        _debug           => $args{'debug'}     || 0,
+        _verbose         => $args{'verbose'}   || 0,
+        _ipt_exec_style  => $args{'ipt_exec_style'} || 'waitpid',
+        _ipt_exec_sleep  => $args{'ipt_exec_sleep'} || 0,
         _sigchld_handler => $args{'sigchld_handler'} || \&REAPER,
     };
-    $self->{'_ipt_bin_name'} = 'iptables';
-    $self->{'_ipt_bin_name'} = $1 if $self->{'_iptables'} =~ m|.*/(\S+)|;
 
-    croak "[*] $self->{'_iptables'} incorrect $self->{'_ipt_bin_name'} path.\n"
-        unless -e $self->{'_iptables'};
-    croak "[*] $self->{'_iptables'} not executable.\n"
-        unless -x $self->{'_iptables'};
+    if ($self->{'_firewall_cmd'}) {
+        croak "[*] $self->{'_firewall_cmd'} incorrect path.\n"
+            unless -e $self->{'_firewall_cmd'};
+        croak "[*] $self->{'_firewall_cmd'} not executable.\n"
+            unless -x $self->{'_firewall_cmd'};
+    } else {
+        if ($self->{'_ipv6'} and $self->{'_iptables'} eq '/sbin/iptables') {
+            $self->{'_iptables'} = '/sbin/ip6tables';
+        }
+        croak "[*] $self->{'_iptables'} incorrect path.\n"
+            unless -e $self->{'_iptables'};
+        croak "[*] $self->{'_iptables'} not executable.\n"
+            unless -x $self->{'_iptables'};
+    }
+
+    ### set the firewall binary name
+    $self->{'_ipt_bin_name'} = 'iptables';
+    if ($self->{'_firewall_cmd'}) {
+        $self->{'_ipt_bin_name'} = $1 if $self->{'_firewall_cmd'} =~ m|.*/(\S+)|;
+    } else {
+        $self->{'_ipt_bin_name'} = $1 if $self->{'_iptables'} =~ m|.*/(\S+)|;
+    }
+
+    ### handle ipv6
+    if ($self->{'_ipv6'}) {
+        if ($self->{'_firewall_cmd'}) {
+            if ($self->{'_fwd_args'} =~ /ipv4/i) {
+                $self->{'_fwd_args'} = '--direct --passthrough ipv6';
+            }
+        } else {
+            if ($self->{'_ipt_bin_name'} eq 'iptables') {
+                unless ($self->{'_skip_ipt_exec_check'}) {   ### FIXME
+                    croak "[*] use_ipv6 is true, " .
+                        "but $self->{'_iptables'} not ip6tables.\n";
+                }
+            }
+        }
+    }
+
+    ### set the main command string to allow for iptables execution
+    ### via firewall-cmd if necessary
+    $self->{'_cmd'} = $self->{'_iptables'};
+    if ($self->{'_firewall_cmd'}) {
+        $self->{'_cmd'} = "$self->{'_firewall_cmd'} $self->{'_fwd_args'}";
+    }
+
+    $self->{'parse_obj'} = IPTables::Parse->new(%args);
 
     bless $self, $class;
 }
@@ -58,17 +102,15 @@ sub chain_exists() {
     my $self = shift;
     my $table = shift || croak '[*] Must specify a table, e.g. "filter".';
     my $chain = shift || croak '[*] Must specify a chain to check.';
-    my $iptables = $self->{'_iptables'};
 
     ### see if the chain exists
-    return $self->run_ipt_cmd("$iptables -t $table -v -n -L $chain");
+    return $self->run_ipt_cmd("$self->{'_cmd'} -t $table -v -n -L $chain");
 }
 
 sub create_chain() {
     my $self = shift;
     my $table = shift || croak '[*] Must specify a table, e.g. "filter".';
     my $chain = shift || croak '[*] Must specify a chain to create.';
-    my $iptables = $self->{'_iptables'};
 
     ### see if the chain exists first
     my ($rv, $out_ar, $err_ar) = $self->chain_exists($table, $chain);
@@ -77,17 +119,16 @@ sub create_chain() {
     return 1, $out_ar, $err_ar if $rv;
 
     ### create the chain
-    return $self->run_ipt_cmd("$iptables -t $table -N $chain");
+    return $self->run_ipt_cmd("$self->{'_cmd'} -t $table -N $chain");
 }
 
 sub flush_chain() {
     my $self = shift;
     my $table = shift || croak '[*] Must specify a table, e.g. "filter".';
     my $chain = shift || croak '[*] Must specify a chain.';
-    my $iptables = $self->{'_iptables'};
 
     ### flush the chain
-    return $self->run_ipt_cmd("$iptables -t $table -F $chain");
+    return $self->run_ipt_cmd("$self->{'_cmd'} -t $table -F $chain");
 }
 
 sub delete_chain() {
@@ -97,7 +138,6 @@ sub delete_chain() {
         croak '[*] Must specify a chain from which ',
             'packets were jumped to this chain';
     my $del_chain = shift || croak '[*] Must specify a chain to delete.';
-    my $iptables = $self->{'_iptables'};
 
     ### see if the chain exists first
     my ($rv, $out_ar, $err_ar) = $self->chain_exists($table, $del_chain);
@@ -107,7 +147,7 @@ sub delete_chain() {
 
     ### flush the chain
     ($rv, $out_ar, $err_ar)
-        = $self->flush_chain($table, $del_chain, $iptables);
+        = $self->flush_chain($table, $del_chain);
 
     ### could not flush the chain
     return 0, $out_ar, $err_ar unless $rv;
@@ -123,13 +163,13 @@ sub delete_chain() {
 
     if ($rulenum) {
         $self->run_ipt_cmd(
-            "$iptables -t $table -D $jump_from_chain $rulenum");
+            "$self->{'_cmd'} -t $table -D $jump_from_chain $rulenum");
     }
 
     ### note that we try to delete the chain now regardless
     ### of whether their were jump rules above (should probably
     ### parse for the "0 references" under the -nL <chain> output).
-    return $self->run_ipt_cmd("$iptables -t $table -X $del_chain");
+    return $self->run_ipt_cmd("$self->{'_cmd'} -t $table -X $del_chain");
 }
 
 sub set_chain_policy() {
@@ -138,10 +178,9 @@ sub set_chain_policy() {
     my $chain = shift || croak '[*] Must specify a chain.';
     my $target  = shift || croak qq|[-] Must specify an | .
         qq|$self->{'_ipt_bin_name'} target, e.g. "DROP"|;
-    my $iptables = $self->{'_iptables'};
 
     ### set the chain policy: note that $chain must be a built-in chain
-    return $self->run_ipt_cmd("$iptables -t $table -P $chain $target");
+    return $self->run_ipt_cmd("$self->{'_cmd'} -t $table -P $chain $target");
 }
 
 sub append_ip_rule() {
@@ -173,7 +212,6 @@ sub add_ip_rule() {
             qq|target, e.g. "DROP"|;
     ### optionally add port numbers and protocols, etc.
     my $extended_hr = shift || {};
-    my $iptables = $self->{'_iptables'};
 
     ### normalize src/dst if necessary; this is because iptables
     ### always reports the network address for subnets
@@ -208,10 +246,10 @@ sub add_ip_rule() {
     my $idx_err = '';
 
     if ($rulenum == 0) {
-        $ipt_cmd = "$iptables -t $table -I $chain 1 ";
+        $ipt_cmd = "$self->{'_cmd'} -t $table -I $chain 1 ";
     } elsif ($rulenum < 0) {
         ### switch to append mode
-        $ipt_cmd = "$iptables -t $table -A $chain ";
+        $ipt_cmd = "$self->{'_cmd'} -t $table -A $chain ";
     } else {
         ### check to see if the insertion index ($rulenum) is too big
         if ($rulenum > $num_chain_rules+1) {
@@ -220,7 +258,7 @@ sub add_ip_rule() {
                 if $num_chain_rules > 0;
             $rulenum = $num_chain_rules + 1;
         }
-        $ipt_cmd = "$iptables -t $table -I $chain $rulenum ";
+        $ipt_cmd = "$self->{'_cmd'} -t $table -I $chain $rulenum ";
     }
 
     if (keys %$extended_hr) {
@@ -261,36 +299,25 @@ sub build_ipt_matches() {
 
     if ($IPTables::Parse::VERSION > 1.1) {
 
-        ### get the information about how to build the match part of the
-        ### iptables command from the IPTables::Parse module
-        my $ipt_parse = IPTables::Parse->new(
-            'iptables'  => $self->{'_iptables'},
-            'iptout'    => $self->{'_iptout'},
-            'ipterr'    => $self->{'_ipterr'},
-            'debug'     => $self->{'_debug'},
-            'verbose'   => $self->{'_verbose'},
-            'ipt_alarm' => $self->{'_ipt_alarm'},
-            'ipt_exec_style' => $self->{'_ipt_exec_style'},
-            'ipt_exec_sleep' => $self->{'_ipt_exec_sleep'},
-            'sigchld_handler' => $self->{'_sigchld_handler'},
-        ) or croak "[*] Could not acquire IPTables::Parse object";
-
         ### src and dst
         if ($normalized_src ne '') {
-            $ipt_matches .= "$ipt_parse->{'parse_keys'}->{'regular'}->{'src'}->{'ipt_match'} " .
-                "$normalized_src ";
+            $ipt_matches .= $self->{'parse_obj'}->
+                {'parse_keys'}->{'regular'}->{'src'}->{'ipt_match'} .
+                " $normalized_src ";
         }
 
         if ($normalized_src ne '') {
-            $ipt_matches .= "$ipt_parse->{'parse_keys'}->{'regular'}->{'dst'}->{'ipt_match'} " .
-                "$normalized_dst ";
+            $ipt_matches .= $self->{'parse_obj'}->
+                {'parse_keys'}->{'regular'}->{'dst'}->{'ipt_match'} .
+                " $normalized_dst ";
         }
 
         ### handle 'regular' keys first
         for my $key (keys %$extended_hr) {
-            if (defined $ipt_parse->{'parse_keys'}->{'regular'}->{$key}) {
-                $ipt_matches .= "$ipt_parse->{'parse_keys'}->{'regular'}->{$key}->{'ipt_match'} " .
-                    "$extended_hr->{$key} ";
+            if (defined $self->{'parse_obj'}->{'parse_keys'}->{'regular'}->{$key}) {
+                $ipt_matches .= $self->{'parse_obj'}->
+                    {'parse_keys'}->{'regular'}->{$key}->{'ipt_match'} .
+                    " $extended_hr->{$key} ";
             }
         }
 
@@ -298,14 +325,15 @@ sub build_ipt_matches() {
         for my $key (qw/sport s_dport dport d_port/) {
             next unless defined $extended_hr->{$key};
             if ($extended_hr->{$key}) {
-                $ipt_matches .= "$ipt_parse->{'parse_keys'}->{'extended'}->{$key}->{'ipt_match'} " .
-                    qq|$extended_hr->{$key} |;
+                $ipt_matches .= $self->{'parse_obj'}->
+                    {'parse_keys'}->{'extended'}->{$key}->{'ipt_match'} .
+                    qq| $extended_hr->{$key} |;
             }
         }
 
         ### now handle 'match' keys
         for my $key (keys %$extended_hr) {
-            my $parse_hr = $ipt_parse->{'parse_keys'}->{'extended'};
+            my $parse_hr = $self->{'parse_obj'}->{'parse_keys'}->{'extended'};
             if (defined $parse_hr->{$key}) {
                 next if $key =~ /s_?port$/ or $key =~ /d_?port$/;
                 if (defined $parse_hr->{$key}->{'use_quotes'}
@@ -364,7 +392,6 @@ sub delete_ip_rule() {
         qq|$self->{'_ipt_bin_name'} target, e.g. "DROP"|;
     ### optionally add port numbers and protocols, etc.
     my $extended_hr = shift || {};
-    my $iptables = $self->{'_iptables'};
 
     ### normalize src/dst if necessary; this is because iptables
     ### always reports network address for subnets
@@ -378,7 +405,7 @@ sub delete_ip_rule() {
 
     if ($rulenum) {
         ### we need to delete the rule
-        return $self->run_ipt_cmd("$iptables -t $table -D $chain $rulenum");
+        return $self->run_ipt_cmd("$self->{'_cmd'} -t $table -D $chain $rulenum");
     }
 
     my $extended_msg = '';
@@ -412,19 +439,6 @@ sub find_ip_rule() {
 
     ### optionally add port numbers and protocols, etc.
     my $extended_hr = shift || {};
-    my $iptables = $self->{'_iptables'};
-
-    my $ipt_parse = IPTables::Parse->new(
-        'iptables'  => $self->{'_iptables'},
-        'iptout'    => $self->{'_iptout'},
-        'ipterr'    => $self->{'_ipterr'},
-        'debug'     => $self->{'_debug'},
-        'verbose'   => $self->{'_verbose'},
-        'ipt_alarm' => $self->{'_ipt_alarm'},
-        'ipt_exec_style' => $self->{'_ipt_exec_style'},
-        'ipt_exec_sleep' => $self->{'_ipt_exec_sleep'},
-        'sigchld_handler' => $self->{'_sigchld_handler'},
-    ) or croak "[*] Could not acquire IPTables::Parse object";
 
     my $fh = *STDERR;
     $fh = *STDOUT if $verbose;
@@ -443,10 +457,10 @@ sub find_ip_rule() {
         @parse_keys = ();
 
         ### get the keys list from the IPTables::Parse module
-        for my $key (keys %{$ipt_parse->{'parse_keys'}->{'regular'}}) {
+        for my $key (keys %{$self->{'parse_obj'}->{'parse_keys'}->{'regular'}}) {
             push @parse_keys, $key;
         }
-        for my $key (keys %{$ipt_parse->{'parse_keys'}->{'extended'}}) {
+        for my $key (keys %{$self->{'parse_obj'}->{'parse_keys'}->{'extended'}}) {
             push @parse_keys, $key;
         }
 
@@ -469,7 +483,7 @@ sub find_ip_rule() {
         }
     }
 
-    my $chain_ar = $ipt_parse->chain_rules($table, $chain);
+    my $chain_ar = $self->{'parse_obj'}->chain_rules($table, $chain);
 
     $src = $self->normalize_net($src) if defined $extended_hr->{'normalize'}
         and $extended_hr->{'normalize'};
@@ -539,23 +553,11 @@ sub find_ip_rule() {
 sub print_parse_capabilities() {
     my $self = shift;
 
-    my $ipt_parse = IPTables::Parse->new(
-        'iptables'  => $self->{'_iptables'},
-        'iptout'    => $self->{'_iptout'},
-        'ipterr'    => $self->{'_ipterr'},
-        'debug'     => $self->{'_debug'},
-        'verbose'   => $self->{'_verbose'},
-        'ipt_alarm' => $self->{'_ipt_alarm'},
-        'ipt_exec_style' => $self->{'_ipt_exec_style'},
-        'ipt_exec_sleep' => $self->{'_ipt_exec_sleep'},
-        'sigchld_handler' => $self->{'_sigchld_handler'},
-    ) or croak "[*] Could not acquire IPTables::Parse object";
-
     if ($IPTables::Parse::VERSION > 1.1) {
 
         print "[+] IPTables::Parse regular options:\n";
-        for my $key (keys %{$ipt_parse->{'parse_keys'}->{'regular'}}) {
-            my $p_hr = $ipt_parse->{'parse_keys'}->{'regular'}->{$key};
+        for my $key (keys %{$self->{'parse_obj'}->{'parse_keys'}->{'regular'}}) {
+            my $p_hr = $self->{'parse_obj'}->{'parse_keys'}->{'regular'}->{$key};
             print "    $key\n";
             if (defined $p_hr->{'regex'} and $p_hr->{'regex'}) {
                 print "      regex: $p_hr->{'regex'}", "\n";
@@ -566,8 +568,8 @@ sub print_parse_capabilities() {
         }
 
         print "\n[+] IPTables::Parse extended options:\n";
-        for my $key (keys %{$ipt_parse->{'parse_keys'}->{'extended'}}) {
-            my $p_hr = $ipt_parse->{'parse_keys'}->{'extended'}->{$key};
+        for my $key (keys %{$self->{'parse_obj'}->{'parse_keys'}->{'extended'}}) {
+            my $p_hr = $self->{'parse_obj'}->{'parse_keys'}->{'extended'}->{$key};
             print "    $key\n";
             if (defined $p_hr->{'regex'} and $p_hr->{'regex'}) {
                 print "      regex: $p_hr->{'regex'}", "\n";
@@ -647,7 +649,6 @@ sub add_jump_rule() {
     my $from_chain = shift || croak '[-] Must specify chain to jump from.';
     my $rulenum    = shift || croak '[-] Must specify jump rule chain position';
     my $to_chain   = shift || croak '[-] Must specify chain to jump to.';
-    my $iptables = $self->{'_iptables'};
     my $idx_err = '';
 
     if ($from_chain eq $to_chain) {
@@ -681,7 +682,7 @@ sub add_jump_rule() {
 
     ### we need to add the rule
     my ($rv, $out_ar, $err_ar) = $self->run_ipt_cmd(
-        "$iptables -t $table -I $from_chain $rulenum -j $to_chain");
+        "$self->{'_cmd'} -t $table -I $from_chain $rulenum -j $to_chain");
     push @$err_ar, $idx_err if $idx_err;
     return $rv, $out_ar, $err_ar;
 }
@@ -697,125 +698,12 @@ sub REAPER {
 
 sub run_ipt_cmd() {
     my $self  = shift;
-    my $cmd = shift || croak qq|[*] Must specify an | .
+    my $cmd = shift || croak qq|[*] Must specify | .
         qq|$self->{'_ipt_bin_name'} command to run.|;
-    my $iptables  = $self->{'_iptables'};
-    my $iptout    = $self->{'_iptout'};
-    my $ipterr    = $self->{'_ipterr'};
-    my $debug     = $self->{'_debug'};
-    my $ipt_alarm = $self->{'_ipt_alarm'};
-    my $verbose   = $self->{'_verbose'};
-    my $ipt_exec_style = $self->{'_ipt_exec_style'};
-    my $ipt_exec_sleep = $self->{'_ipt_exec_sleep'};
-    my $sigchld_handler = $self->{'_sigchld_handler'};
 
-
-    croak "[*] $cmd does not look like an $self->{'_ipt_bin_name'} command."
-        unless $cmd =~ m|^\s*iptables| or $cmd =~ m|^\S+/iptables|
-            or $cmd =~ m|^\s*ip6tables| or $cmd =~ m|^\S+/ip6tables|;
-
-    my $rv = 1;
-    my @stdout = ();
-    my @stderr = ();
-
-    my $fh = *STDERR;
-    $fh = *STDOUT if $verbose;
-
-    if ($debug or $verbose) {
-        print $fh localtime() . " [+] IPTables::ChainMgr::",
-            "run_ipt_cmd(${ipt_exec_style}()) $cmd\n";
-        if ($ipt_exec_sleep > 0) {
-            print $fh localtime() . " [+] IPTables::ChainMgr::",
-                "run_ipt_cmd() sleep seconds: $ipt_exec_sleep\n";
-        }
-    }
-
-    if ($ipt_exec_sleep > 0) {
-
-        if ($debug or $verbose) {
-            print $fh localtime() . " [+] IPTables::ChainMgr: ",
-                "sleeping for $ipt_exec_sleep seconds before ",
-                "executing $self->{'_ipt_bin_name'} command.\n";
-        }
-        sleep $ipt_exec_sleep;
-    }
-
-    if ($ipt_exec_style eq 'system') {
-        system qq{$cmd > $iptout 2> $ipterr};
-    } elsif ($ipt_exec_style eq 'popen') {
-        open CMD, "$cmd 2> $ipterr |" or croak "[*] Could not execute $cmd: $!";
-        @stdout = <CMD>;
-        close CMD;
-        open F, "> $iptout" or croak "[*] Could not open $iptout: $!";
-        print F for @stdout;
-        close F;
-    } else {
-        my $ipt_pid;
-
-        if ($debug or $verbose) {
-            print $fh localtime() . " [+] IPTables::ChainMgr: " .
-                "Setting SIGCHLD handler to: " . $sigchld_handler . "\n";
-        }
-
-        local $SIG{'CHLD'} = $sigchld_handler;
-        if ($ipt_pid = fork()) {
-            eval {
-                ### iptables should never take longer than 30 seconds to execute,
-                ### unless there is some absolutely enormous policy or the kernel
-                ### is exceedingly busy
-                local $SIG{'ALRM'} = sub {die "[*] $self->{'_ipt_bin_name'} " .
-                    "command timeout.\n"};
-                alarm $ipt_alarm;
-                waitpid($ipt_pid, 0);
-                alarm 0;
-            };
-            if ($@) {
-                kill 9, $ipt_pid unless kill 15, $ipt_pid;
-            }
-        } else {
-            croak "[*] Could not fork $self->{'_ipt_bin_name'}: $!"
-                unless defined $ipt_pid;
-
-            ### exec the iptables command and preserve stdout and stderr
-            exec qq{$cmd > $iptout 2> $ipterr};
-        }
-    }
-
-    if (not @stdout and -e $iptout) {
-        open F, "< $iptout" or croak "[*] Could not open $iptout";
-        @stdout = <F>;
-        close F;
-    }
-    if (-e $ipterr) {
-        open F, "< $ipterr" or croak "[*] Could not open $ipterr";
-        @stderr = <F>;
-        close F;
-
-        $rv = 0 if @stderr;
-    }
-
-    if ($debug or $verbose) {
-        print $fh localtime() . "     $self->{'_ipt_bin_name'} " .
-            "command stdout:\n";
-        for my $line (@stdout) {
-            if ($line =~ /\n$/) {
-                print $fh $line;
-            } else {
-                print $fh $line, "\n";
-            }
-        }
-        print $fh localtime() . "     $self->{'_ipt_bin_name'} " .
-            "command stderr:\n";
-        for my $line (@stderr) {
-            if ($line =~ /\n$/) {
-                print $fh $line;
-            } else {
-                print $fh $line, "\n";
-            }
-        }
-    }
-
-    return $rv, \@stdout, \@stderr;
+    ### iptables execution is provided by IPTables::Parse which is
+    ### a dependency of IPTables::ChainMgr
+    return $self->{'parse_obj'}->exec_iptables($cmd);
 }
 
 1;
