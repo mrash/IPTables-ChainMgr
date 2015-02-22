@@ -112,7 +112,8 @@ sub delete_chain() {
     return 0, $out_ar, $err_ar unless $rv;
 
     my $ip_any_net = '0.0.0.0/0';
-    $ip_any_net = '::/0' if $self->{'_ipt_bin_name'} eq 'ip6tables';
+    $ip_any_net = '::/0'
+        if $self->{'_ipt_bin_name'} eq 'ip6tables' or $self->{'_ipv6'};
 
     ### find and delete jump rules to this chain (we can't delete
     ### the chain until there are no references to it)
@@ -616,7 +617,8 @@ sub add_jump_rule() {
     }
 
     my $ip_any_net = '0.0.0.0/0';
-    $ip_any_net = '::/0' if $self->{'_ipt_bin_name'} eq 'ip6tables';
+    $ip_any_net = '::/0'
+        if $self->{'_ipt_bin_name'} eq 'ip6tables' or $self->{'_ipv6'};
 
     ### first check to see if the jump rule already exists
     my ($rule_position, $num_chain_rules)
@@ -730,12 +732,12 @@ IPTables::ChainMgr - Perl extension for manipulating iptables and ip6tables poli
   $ipt_obj->add_jump_rule('filter', 'INPUT', 4, 'CUSTOM');
 
   # find rule that allows all traffic from 10.1.2.0/24 to 192.168.1.2
-  ($rv, $rule_num) = $ipt_obj->find_ip_rule('10.1.2.0/24', '192.168.1.2',
+  ($rule_num, $chain_rules) = $ipt_obj->find_ip_rule('10.1.2.0/24', '192.168.1.2',
       'filter', 'INPUT', 'ACCEPT', {'normalize' => 1});
 
   # find rule that allows all TCP port 80 traffic from 10.1.2.0/24 to
   # 192.168.1.1
-  ($rv, $rule_num) = $ipt_obj->find_ip_rule('10.1.2.0/24', '192.168.1.2',
+  ($rule_num, $chain_rules) = $ipt_obj->find_ip_rule('10.1.2.0/24', '192.168.1.2',
       'filter', 'INPUT', 'ACCEPT', {'normalize' => 1, 'protocol' => 'tcp',
       's_port' => 0, 'd_port' => 80});
 
@@ -761,11 +763,11 @@ IPTables::ChainMgr - Perl extension for manipulating iptables and ip6tables poli
   # (requires instantiating the IPTables::ChainMgr object with
   # /sbin/ip6tables): find rule that allows all traffic from fe80::200:f8ff:fe21:67cf
   # to 0:0:aa::/64
-  ($rv, $rule_num) = $ipt_obj->find_ip_rule('fe80::200:f8ff:fe21:67cf', '0:0:aa::/64',
+  ($rule_num, $chain_rules) = $ipt_obj->find_ip_rule('fe80::200:f8ff:fe21:67cf', '0:0:aa::/64',
       'filter', 'INPUT', 'ACCEPT', {'normalize' => 1});
 
   # find rule that allows all TCP port 80 traffic from fe80::200:f8ff:fe21:67c to 0:0:aa::/64
-  ($rv, $rule_num) = $ipt_obj->find_ip_rule('fe80::200:f8ff:fe21:67cf', '0:0:aa::/64',
+  ($rule_num, $chain_rules) = $ipt_obj->find_ip_rule('fe80::200:f8ff:fe21:67cf', '0:0:aa::/64',
       'filter', 'INPUT', 'ACCEPT', {'normalize' => 1, 'protocol' => 'tcp',
       's_port' => 0, 'd_port' => 80});
 
