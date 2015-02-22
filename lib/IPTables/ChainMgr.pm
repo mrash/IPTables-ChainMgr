@@ -32,68 +32,27 @@ sub new() {
     my $class = shift;
     my %args  = @_;
 
-    my $self = {
-        _iptables        => $args{'iptables'}  || $args{'ip6tables'} || '/sbin/iptables',
-        _firewall_cmd    => $args{'firewall-cmd'} || '',
-        _fwd_args        => $args{'fwd_args'}     || '--direct --passthrough ipv4',
-        _ipv6            => $args{'use_ipv6'}     || 0,
-        _iptout          => $args{'iptout'}    || '/tmp/ipt.out',
-        _ipterr          => $args{'ipterr'}    || '/tmp/ipt.err',
-        _ipt_alarm       => $args{'ipt_alarm'} || 30,
-        _debug           => $args{'debug'}     || 0,
-        _verbose         => $args{'verbose'}   || 0,
-        _ipt_exec_style  => $args{'ipt_exec_style'} || 'waitpid',
-        _ipt_exec_sleep  => $args{'ipt_exec_sleep'} || 0,
-        _sigchld_handler => $args{'sigchld_handler'} || \&REAPER,
-    };
-
-    if ($self->{'_firewall_cmd'}) {
-        croak "[*] $self->{'_firewall_cmd'} incorrect path.\n"
-            unless -e $self->{'_firewall_cmd'};
-        croak "[*] $self->{'_firewall_cmd'} not executable.\n"
-            unless -x $self->{'_firewall_cmd'};
-    } else {
-        if ($self->{'_ipv6'} and $self->{'_iptables'} eq '/sbin/iptables') {
-            $self->{'_iptables'} = '/sbin/ip6tables';
-        }
-        croak "[*] $self->{'_iptables'} incorrect path.\n"
-            unless -e $self->{'_iptables'};
-        croak "[*] $self->{'_iptables'} not executable.\n"
-            unless -x $self->{'_iptables'};
-    }
-
-    ### set the firewall binary name
-    $self->{'_ipt_bin_name'} = 'iptables';
-    if ($self->{'_firewall_cmd'}) {
-        $self->{'_ipt_bin_name'} = $1 if $self->{'_firewall_cmd'} =~ m|.*/(\S+)|;
-    } else {
-        $self->{'_ipt_bin_name'} = $1 if $self->{'_iptables'} =~ m|.*/(\S+)|;
-    }
-
-    ### handle ipv6
-    if ($self->{'_ipv6'}) {
-        if ($self->{'_firewall_cmd'}) {
-            if ($self->{'_fwd_args'} =~ /ipv4/i) {
-                $self->{'_fwd_args'} = '--direct --passthrough ipv6';
-            }
-        } else {
-            if ($self->{'_ipt_bin_name'} eq 'iptables') {
-                unless ($self->{'_skip_ipt_exec_check'}) {   ### FIXME
-                    croak "[*] use_ipv6 is true, " .
-                        "but $self->{'_iptables'} not ip6tables.\n";
-                }
-            }
-        }
-    }
-
-    ### set the main command string to allow for iptables execution
-    ### via firewall-cmd if necessary
-    $self->{'_cmd'} = $self->{'_iptables'};
-    if ($self->{'_firewall_cmd'}) {
-        $self->{'_cmd'} = "$self->{'_firewall_cmd'} $self->{'_fwd_args'}";
-    }
+    my $self = {};
 
     $self->{'parse_obj'} = IPTables::Parse->new(%args);
+
+    for my $key ('_cmd',
+            '_ipt_bin_name',
+            '_iptables',
+            '_firewall_cmd',
+            '_fwd_args',
+            '_ipv6',
+            '_iptout',
+            '_ipterr',
+            '_ipt_alarm',
+            '_debug',
+            '_verbose',
+            '_ipt_exec_style',
+            '_ipt_exec_sleep',
+            '_sigchld_handler',
+            ) {
+        $self->{$key} = $self->{'parse_obj'}->{$key};
+    }
 
     bless $self, $class;
 }
