@@ -593,10 +593,12 @@ sub normalize_net() {
             my $n = NetAddr::IP->new6($net)
                 or croak "[*] Could not acquire NetAddr::IP object for $net";
             $normalized_net = lc($n->network()->short()) . '/' . $n->masklen();
+            $normalized_net =~ s|/128$||;
         } else {
             my $n = NetAddr::IP->new($net)
                 or croak "[*] Could not acquire NetAddr::IP object for $net";
             $normalized_net = $n->network()->cidr();
+            $normalized_net =~ s|/32$||;
         }
     }
     return $normalized_net;
