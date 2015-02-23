@@ -112,8 +112,7 @@ sub delete_chain() {
     return 0, $out_ar, $err_ar unless $rv;
 
     my $ip_any_net = '0.0.0.0/0';
-    $ip_any_net = '::/0'
-        if $self->{'_ipt_bin_name'} eq 'ip6tables' or $self->{'_ipv6'};
+    $ip_any_net = '::/0' if $self->{'_ipv6'};
 
     ### find and delete jump rules to this chain (we can't delete
     ### the chain until there are no references to it)
@@ -617,8 +616,7 @@ sub add_jump_rule() {
     }
 
     my $ip_any_net = '0.0.0.0/0';
-    $ip_any_net = '::/0'
-        if $self->{'_ipt_bin_name'} eq 'ip6tables' or $self->{'_ipv6'};
+    $ip_any_net = '::/0' if $self->{'_ipv6'};
 
     ### first check to see if the jump rule already exists
     my ($rule_position, $num_chain_rules)
