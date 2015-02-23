@@ -210,7 +210,7 @@ sub add_jump_rule_test() {
     &pass_fail($rv, "   Could not add jump rule.");
 
     my $ip_any_net = '0.0.0.0/0';
-    $ip_any_net = '::/0' if $ipt_obj->{'_ipt_bin_name'} eq 'ip6tables';
+    $ip_any_net = '::/0' if $ipt_obj->{'_ipv6'};
 
     &dots_print("find jump rule: $test_table $test_jump_from_chain -> $test_chain ");
 
@@ -228,7 +228,7 @@ sub add_rules_tests() {
     my $src_ip = $ipt_obj->normalize_net($ipv4_src);
     my $dst_ip = $ipt_obj->normalize_net($ipv4_dst);
 
-    if ($ipt_obj->{'_ipt_bin_name'} eq 'ip6tables') {
+    if ($ipt_obj->{'_ipv6'}) {
         $src_ip = $ipt_obj->normalize_net($ipv6_src);
         $dst_ip = $ipt_obj->normalize_net($ipv6_dst);
     }
@@ -270,7 +270,7 @@ sub add_extended_rules_tests() {
     my $src_ip = $ipt_obj->normalize_net($ipv4_src);
     my $dst_ip = $ipt_obj->normalize_net($ipv4_dst);
 
-    if ($ipt_obj->{'_ipt_bin_name'} eq 'ip6tables') {
+    if ($ipt_obj->{'_ipv6'}) {
         $src_ip = $ipt_obj->normalize_net($ipv6_src);
         $dst_ip = $ipt_obj->normalize_net($ipv6_dst);
     }
