@@ -135,7 +135,7 @@ sub set_chain_policy() {
     my $self = shift;
     my $table = shift || croak '[*] Must specify a table, e.g. "filter".';
     my $chain = shift || croak '[*] Must specify a chain.';
-    my $target  = shift || croak qq|[-] Must specify an | .
+    my $target  = shift || croak qq|[-] Must specify | .
         qq|$self->{'_ipt_bin_name'} target, e.g. "DROP"|;
 
     ### set the chain policy: note that $chain must be a built-in chain
@@ -148,7 +148,7 @@ sub append_ip_rule() {
     my $dst = shift || croak '[-] Must specify a dst address/network.';
     my $table   = shift || croak '[-] Must specify a table, e.g. "filter".';
     my $chain   = shift || croak '[-] Must specify a chain.';
-    my $target  = shift || croak qq|[-] Must specify an | .
+    my $target  = shift || croak qq|[-] Must specify | .
         qq|$self->{'_ipt_bin_name'} target, e.g. "DROP"|;
 
     ### optionally add port numbers and protocols, etc.
@@ -163,11 +163,11 @@ sub add_ip_rule() {
     my $self = shift;
     my $src = shift || croak '[-] Must specify a src address/network.';
     my $dst = shift || croak '[-] Must specify a dst address/network.';
-    (my $rulenum = shift) >= -1 || croak '[-] Must specify an insert rule number, or -1 for append.';
+    (my $rulenum = shift) >= -1 || croak '[-] Must specify insert rule number, or -1 for append.';
     my $table   = shift || croak '[-] Must specify a table, e.g. "filter".';
     my $chain   = shift || croak '[-] Must specify a chain.';
     my $target  = shift ||
-        croak qq|[-] Must specify an $self->{'_ipt_bin_name'} | .
+        croak qq|[-] Must specify $self->{'_ipt_bin_name'} | .
             qq|target, e.g. "DROP"|;
     ### optionally add port numbers and protocols, etc.
     my $extended_hr = shift || {};
@@ -347,7 +347,7 @@ sub delete_ip_rule() {
     my $dst = shift || croak '[-] Must specify a dst address/network.';
     my $table  = shift || croak '[-] Must specify a table, e.g. "filter".';
     my $chain  = shift || croak '[-] Must specify a chain.';
-    my $target = shift || croak qq|[-] Must specify an | .
+    my $target = shift || croak qq|[-] Must specify | .
         qq|$self->{'_ipt_bin_name'} target, e.g. "DROP"|;
     ### optionally add port numbers and protocols, etc.
     my $extended_hr = shift || {};
