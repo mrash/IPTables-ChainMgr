@@ -682,11 +682,13 @@ IPTables::ChainMgr - Perl extension for manipulating iptables and ip6tables poli
   my $ipt_bin = '/sbin/iptables'; # can set this to /sbin/ip6tables
 
   my %opts = (
-      'iptables' => $ipt_bin, # can specify 'ip6tables' hash key instead
+      'use_ipv6' => 0,         # can set to 1 to force ip6tables usage
+      'ipt_rules_file' => '',  # optional file path from
+                               # which to read iptables rules
       'iptout'   => '/tmp/iptables.out',
       'ipterr'   => '/tmp/iptables.err',
       'debug'    => 0,
-      'verbose'  => 0,
+      'verbose'  => 0
 
       ### advanced options
       'ipt_alarm' => 5,  ### max seconds to wait for iptables execution.
@@ -797,14 +799,16 @@ IPTables::ChainMgr - Perl extension for manipulating iptables and ip6tables poli
 
 The C<IPTables::ChainMgr> package provides an interface to manipulate iptables
 and ip6tables policies on Linux systems through the direct execution of
-iptables/ip6tables commands.  Although making a perl extension of libiptc
-provided by the Netfilter project is possible (and has been done by the
-IPTables::libiptc module available from CPAN), it is also easy enough to just
-execute iptables/ip6tables commands directly in order to both parse and change
-the configuration of the policy.  Further, this simplifies installation since
-the only external requirement is (in the spirit of scripting) to be able to
-point IPTables::ChainMgr at an installed iptables or ip6tables binary instead
-of having to compile against a library.
+iptables/ip6tables commands. Note that the 'firewalld' infrastructure on
+Fedora21 is also supported through execution of the 'firewall-cmd' binary.
+Although making a perl extension of libiptc provided by the Netfilter project
+is possible (and has been done by the IPTables::libiptc module available from
+CPAN), it is also easy enough to just execute iptables/ip6tables commands
+directly in order to both parse and change the configuration of the policy.
+Further, this simplifies installation since the only external requirement is
+(in the spirit of scripting) to be able to point IPTables::ChainMgr at an
+installed iptables or ip6tables binary instead of having to compile against a
+library.
 
 =head1 FUNCTIONS
 
