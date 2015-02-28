@@ -998,8 +998,7 @@ also here:
 
 Source control is provided by git:
 
-  http://www.cipherdyne.org/git/IPTables-ChainMgr.git
-  http://www.cipherdyne.org/cgi-bin/gitweb.cgi?p=IPTables-ChainMgr.git;a=summary
+  http://github.com/mrash/IPTables-ChaingMgr.git
 
 =head1 CREDITS
 
@@ -1017,7 +1016,7 @@ there are any questions, comments, or bug reports.
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2005-2012 Michael Rash.  All rights reserved.
+Copyright (C) 2005-2015 Michael Rash.  All rights reserved.
 
 This module is free software.  You can redistribute it and/or
 modify it under the terms of the Artistic License 2.0.  More information
