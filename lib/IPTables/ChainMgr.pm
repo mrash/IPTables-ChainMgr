@@ -256,7 +256,7 @@ sub build_ipt_matches() {
     my $ipt_matches = '';
     my $msg = '';
 
-    if ($IPTables::Parse::VERSION > 1.1) {
+    if ($IPTables::Parse::VERSION gt 1.1) {
 
         ### src and dst
         if ($normalized_src ne '') {
@@ -512,7 +512,7 @@ sub find_ip_rule() {
 sub print_parse_capabilities() {
     my $self = shift;
 
-    if ($IPTables::Parse::VERSION > 1.1) {
+    if ($IPTables::Parse::VERSION gt 1.1) {
 
         print "[+] IPTables::Parse regular options:\n";
         for my $key (keys %{$self->{'parse_obj'}->{'parse_keys'}->{'regular'}}) {
