@@ -685,8 +685,6 @@ IPTables::ChainMgr - Perl extension for manipulating iptables and ip6tables poli
       'use_ipv6' => 0,         # can set to 1 to force ip6tables usage
       'ipt_rules_file' => '',  # optional file path from
                                # which to read iptables rules
-      'iptout'   => '/tmp/iptables.out',
-      'ipterr'   => '/tmp/iptables.err',
       'debug'    => 0,
       'verbose'  => 0
 
