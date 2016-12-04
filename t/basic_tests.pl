@@ -19,8 +19,17 @@ my $fw_cmd_bin    = '/bin/firewall-cmd';
 my %test_chains = (
     'filter' => [
         {'chain' => 'CHAINMGR', 'jump_from' => 'INPUT'},
+        {'chain' => 'CHAINMGR', 'jump_from' => 'FORWARD'},
         ### iptables allows odd chain names
         {'chain' => 'SC~!@#^%&$*-[]+={}-test', 'jump_from' => 'INPUT'}
+    ],
+    'mangle' => [
+        {'chain' => 'CHAINMGR', 'jump_from' => 'INPUT'},
+        {'chain' => 'CHAINMGR', 'jump_from' => 'FORWARD'},
+        {'chain' => 'SC~!@#^%&$*-[]+={}-test', 'jump_from' => 'INPUT'}
+    ],
+    'raw' => [
+        {'chain' => 'CHAINMGR', 'jump_from' => 'PREROUTING'},
     ],
 );
 
