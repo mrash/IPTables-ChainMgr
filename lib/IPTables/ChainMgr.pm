@@ -169,6 +169,7 @@ sub add_ip_rule() {
     my $target  = shift ||
         croak qq|[-] Must specify $self->{'_ipt_bin_name'} | .
             qq|target, e.g. "DROP"|;
+
     ### optionally add port numbers and protocols, etc.
     my $extended_hr = shift || {};
 
