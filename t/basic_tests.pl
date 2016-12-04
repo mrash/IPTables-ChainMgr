@@ -31,6 +31,9 @@ my %test_chains = (
     'raw' => [
         {'chain' => 'CHAINMGR', 'jump_from' => 'PREROUTING'},
     ],
+    'nat' => [
+        {'chain' => 'CHAINMGR', 'jump_from' => 'PREROUTING'},
+    ],
 );
 
 ### normalization will produce the correct network addresses ("10.1.2.3/24" is
