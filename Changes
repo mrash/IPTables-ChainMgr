@@ -1,6 +1,7 @@
 Revision history for Perl extension IPTables::ChainMgr.
 
-1.6 Sat Dec 03 16:03:45 2016
+1.6 Sat Dec 04 15:42:45 2016
+    - Additional t/basic_tests.pl tests for 'mangle', 'nat', and 'raw' tables.
     - Minor additional bug fix for IPTables::Parse version comparison (reported
       by github user 'meZee').
     - Minor documentation update to ensure to not recommend using predictable
