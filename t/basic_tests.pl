@@ -541,7 +541,7 @@ sub init() {
 
     $< == 0 && $> == 0 or
         die "[*] $0: You must be root (or equivalent ",
-            "UID 0 account) to effectively test fwknop";
+            "UID 0 account) to effectively test IPTables::ChainMgr";
 
     unlink $logfile if -e $logfile;
 
